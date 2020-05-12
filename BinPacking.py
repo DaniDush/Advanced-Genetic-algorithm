@@ -7,11 +7,14 @@ class bin_packing:
 
     def __init__(self, N, is_buffer):
         self.bins = []
-        self.sum_of_bins = [0]*N
         if not is_buffer:
-            for i in range(N):
-                rand_bin = randint(0, N - 1)
-                self.bins.append(rand_bin)
+            bins = list(range(0, N))
+            shuffle(bins)
+            self.bins = bins
+        # if not is_buffer:
+        #     for i in range(N):
+        #         rand_bin = randint(0, N - 1)
+        #         self.bins.append(rand_bin)
 
         self.N = N
         self.sum_of_bins = []
@@ -31,7 +34,7 @@ class bin_packing:
 
     def get_fitness(self):
         total_sum = 0
-        K = 1
+        K = 2
 
         sum_of_bins = [0] * self.N
         # get weights and profits

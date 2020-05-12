@@ -261,7 +261,7 @@ class Population:
                         continue
 
                     _bin = self.genomes[i1].gene.bins[j]
-                    if sum_of_bins[_bin] + bin_packing.W[j] <= bin_packing.C:
+                    if sum_of_bins[_bin] + bin_packing.W[j] <= bin_packing.C and sum_of_bins[_bin] != 0:
                         sum_of_bins[_bin] += bin_packing.W[j]
                         obj_2.append(_bin)
 
