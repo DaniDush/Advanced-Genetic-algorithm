@@ -1,3 +1,4 @@
+import itertools
 from random import shuffle
 import numpy as np
 
@@ -12,6 +13,21 @@ class n_queens:
         else:
             self.board = list(np.random.randint(N, size=N))
         self.N = N
+
+    def calc_distance(self, other):
+        """ implementation of Kendall-tau distance between 2 genes """
+        distance = 0
+
+        # Create pairs
+        pairs = itertools.combinations(range(0, self.N), 2)
+
+        for elem_1, elem_2 in pairs:
+            dist_1 = self.board.index(elem_1) - self.board.index(elem_2)
+            dist_2 = other.board.index(elem_1) - other.board.index(elem_2)
+            if dist_1 * dist_2 < 0:
+                distance += 1
+
+        return distance
 
     def set_obj(self, obj):
         self.board = obj

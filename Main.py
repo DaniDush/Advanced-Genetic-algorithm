@@ -5,7 +5,7 @@ from Const import probs
 from MinimalConflicts import minimal_conflicts
 from BinPacking import bin_packing
 
-GA_MAXITER = 100
+GA_MAXITER = 200
 KS_MAXITER = 30
 
 
@@ -77,19 +77,19 @@ def run_genetic_algo(problem, N):
 
         if problem == 1:
             if OP == current_population.get_best_fitness():
-                print('Generation running time: ', time() - generation_start_time)
+                print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
                 break
 
         if problem == 3:
             print("Number of empty bins", current_population.genomes[0].gene.get_empty_bins())
 
         if current_population.get_best_fitness() is 0:
-            print('Generation running time: ', time() - generation_start_time)
+            print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
             break
 
         current_population.mate(cross_method=cross_method, selection_method=selection_method)
         current_population.swap()
-        print('Generation running time: ', time() - generation_start_time)
+        print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
 
     print('Absolute running time: ', time() - start_time)
 

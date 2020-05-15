@@ -1,3 +1,4 @@
+import time
 from random import randint, shuffle
 import random
 import numpy as np
@@ -5,11 +6,11 @@ from copy import deepcopy
 from NQueens import n_queens
 from KnapSack import knap_sack
 from BoolPegia import bool_pgia
-from BinPacking import bin_packing, Items
+from BinPacking import bin_packing
 
-GA_POPSIZE = 2048
+GA_POPSIZE = 1000
 GA_MAXITER = 16384
-GA_ELITRATE = 0.1
+GA_ELITRATE = 0.2
 GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
@@ -74,10 +75,13 @@ class Genome:
 
 class Population:
 
-    def __init__(self, problem=0):
+    def __init__(self, problem=0, speciation_threshold=4):
         self.genomes = []
         self.buffer = []
         self.problem = problem
+        self.species_list = []
+        self.speciation_threshold = speciation_threshold
+        self.optimal_species = 30
 
     def init_population(self, N=None):
         """ Population initialize - if is_queen is True we will generate random permutation of integers with the given
@@ -126,6 +130,9 @@ class Population:
 
     def mate(self, cross_method=1, selection_method=0):
         esize = int(GA_POPSIZE * GA_ELITRATE)
+
+        # Fitness share method
+        self.fitness_share()
 
         # Taking the best citizens
         self.elitism(esize)
@@ -251,7 +258,7 @@ class Population:
 
             # Solving for bin packing
             if self.problem == 3:
-                sum_of_bins = [0]*tsize
+                sum_of_bins = [0] * tsize
                 for j in range(spos_1, spos_2):
                     obj_1.append(self.genomes[i1].gene.bins[j])
                     sum_of_bins[self.genomes[i1].gene.bins[j]] += bin_packing.W[j]
@@ -336,25 +343,6 @@ class Population:
             if random.random() < GA_MUTATIONRATE:
                 Genome.scramble_mutation(self.buffer[j + 1])
 
-    def handle_crossover(self, buffer, bin_weights, bin_items):
-        """ Moving items from over-weighted bins """
-        for idx, weight in enumerate(bin_weights):
-            if weight > buffer.gene.C:
-                # sort items by weight
-                items = bin_items[idx]
-                items.sort()
-                for item in items:
-                    if weight - item.weight <= buffer.gene.C:
-                        t = 0
-                        while True:
-                            if bin_weights[t] + item.weight <= buffer.gene.C:
-                                buffer.gene.bins[item.get_id()] = Items(item.id, item.weight, t)
-                                bin_weights[t] += item.weight
-                                weight -= item.weight
-                                break
-                            t += 1
-                    break
-
     def SUS(self, num_of_parents):
         """ Parent selection method - Stochastic Universal Sampling (SUS)"""
         # Summing all fitness's for each citizen in population
@@ -401,3 +389,66 @@ class Population:
                 selected.append(best_inv)
 
         return selected
+
+    @staticmethod
+    def sharing_function(distance, sigma_share, alpha):
+        return 1 - (distance / sigma_share) ** alpha if distance < sigma_share else 0
+
+    def fitness_share(self):
+        """ Implementation of share fitness method for scaling fitness's"""
+
+        start = time.time()
+
+        alpha = 1
+        sigma_share = 3200
+        tsize = self.genomes[0].gene.N
+        sharing_matrix = np.zeros((tsize, tsize))
+
+        for i in range(0, tsize):
+            for j in range(i, tsize):
+                sharing_matrix[i, j] = self.sharing_function(self.genomes[i].gene.calc_distance(self.genomes[j].gene),
+                                                             sigma_share=sigma_share, alpha=alpha)
+                sharing_matrix[j, i] = sharing_matrix[i, j]
+
+        if self.problem == 1:
+            for i in range(0, tsize):
+                self.genomes[i].fitness /= sum(sharing_matrix[i])
+        else:
+            for i in range(0, tsize):
+                self.genomes[i].fitness *= sum(sharing_matrix[i])
+        print("Share fitness time: ", time.time() - start)
+
+    def make_species(self, phenotypes, adjust_threshold=True):
+        """ Update species_list """
+
+        self.species_list = []
+        for p in phenotypes:
+            selected_species = self.find_species(p)
+            if len(selected_species) == 0:  # If we didnt find matching species we will ad one
+                self.species_list.append(selected_species)  # initialize a new population
+
+            selected_species.append(p)
+
+        if adjust_threshold:
+            self.adjust_speciation_threshold(phenotypes)
+        return self.species_list
+
+    def find_species(self, i):
+        """searching for matching species from species_list"""
+
+        for species in self.species_list:
+            if self.genomes[i].gene.calc_distance(species[0]) < self.speciation_threshold:
+                return species
+        # If we didnt found matching species
+        return None
+
+    def adjust_speciation_threshold(self, max_iterations=1):
+        """Adjust the number of species to be around max_species"""
+        iterations = 0
+
+        while len(
+                self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
+            iterations += 1
+            self.speciation_threshold += 1 * np.sign(len(self.species_list) - self.optimal_species)
+            self.speciation_threshold = max(1, self.speciation_threshold)
+            self.species_list = self.make_species(self.genomes, adjust_threshold=False)

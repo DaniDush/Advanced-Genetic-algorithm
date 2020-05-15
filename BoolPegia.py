@@ -1,4 +1,5 @@
 from random import randint, shuffle
+import numpy as np
 
 
 class bool_pgia:
@@ -11,6 +12,33 @@ class bool_pgia:
 
         self.size = tsize
         self.target = [char for char in target]
+
+    def calc_distance(self, other):
+        """ implementation of Levenshtein distance between 2 genes """
+        # Create and initializing the distance matrix (fill with 0's)
+        dist_matrix = np.zeros((self.size + 1, self.size + 1))
+
+        dist_matrix[:, 0] = np.arange(self.size + 1)
+        dist_matrix[0, :] = np.arange(self.size + 1)
+
+        # Calculate distances
+        for x in range(1, self.size):
+            for y in range(1, self.size):
+                # if there is a match
+                if self.string[x - 1] == other.string[y - 1]:
+                    dist_matrix[x, y] = min(
+                        dist_matrix[x - 1, y] + 1,
+                        dist_matrix[x - 1, y - 1],
+                        dist_matrix[x, y - 1] + 1
+                    )
+                else:
+                    dist_matrix[x, y] = min(
+                        dist_matrix[x - 1, y] + 1,
+                        dist_matrix[x - 1, y - 1] + 1,
+                        dist_matrix[x, y - 1] + 1
+                    )
+
+        return dist_matrix[self.size, self.size]
 
     def set_obj(self, obj):
         self.string = obj
