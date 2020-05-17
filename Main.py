@@ -5,7 +5,7 @@ from Const import probs
 from MinimalConflicts import minimal_conflicts
 from BinPacking import bin_packing
 
-GA_MAXITER = 200
+GA_MAXITER = 150
 KS_MAXITER = 30
 
 
@@ -40,6 +40,11 @@ def run_minimal_conflicts(N):
 
 def run_genetic_algo(problem, N):
     print("Genetic Algorithm solution: \n")
+    local_optima_range = 5
+    generation_std = []
+    generation_avg_fitness = []
+    generation_similarity = []
+
     cross_method = 2
     selection_method = 2
 
@@ -67,13 +72,29 @@ def run_genetic_algo(problem, N):
     start_time = time()
     current_population = Genetic.Population(problem=problem)
     current_population.init_population(N=N)
-
+    epsilon = 0.2
     for i in range(max_iter):
         generation_start_time = time()
         current_population.calc_fitness()
         current_population.sort_by_fitness()
         current_population.print_best()
-        current_population.calc_avg_std()
+        avg_fitness, std = current_population.calc_avg_std()
+        generation_avg_fitness.append(avg_fitness)
+        generation_std.append(std)
+
+        # Checking if were converging to local optima
+        if i > local_optima_range:  # If were after 10 generation we will start checking
+            fitness_signal = 0
+            std_signal = 0
+            for j in range(local_optima_range):
+                if generation_avg_fitness[-j - 2] - epsilon <= generation_avg_fitness[-j - 1] <= generation_avg_fitness[-j - 2] + epsilon:
+                    fitness_signal += 1
+                if generation_std[-j - 1] <= [-j - 2]:  # if std is converging to 0
+                    std_signal += 1
+            print(fitness_signal, std_signal)
+            if fitness_signal + std_signal == 10:
+                print("Were on local Optima")
+                current_population.handle_local_optima()
 
         if problem == 1:
             if OP == current_population.get_best_fitness():
@@ -81,9 +102,10 @@ def run_genetic_algo(problem, N):
                 break
 
         if problem == 3:
-            print("Number of empty bins", current_population.genomes[0].gene.get_empty_bins())
+            print("Number of empty bins", current_population.genomes[0].gene.get_empty_bins(), "\n")
 
         if current_population.get_best_fitness() is 0:
+            print("Fitness", current_population.get_best_fitness())
             print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
             break
 

@@ -10,7 +10,9 @@ class bool_pgia:
             new_string = "".join([chr(randint(32, 122)) for x in range(tsize)])
             self.string = [char for char in new_string]
 
+        self.N = tsize
         self.size = tsize
+
         self.target = [char for char in target]
 
     def calc_distance(self, other):

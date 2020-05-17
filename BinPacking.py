@@ -14,10 +14,6 @@ class bin_packing:
             bins = list(range(0, N))
             shuffle(bins)
             self.bins = bins
-        # if not is_buffer:
-        #     for i in range(N):
-        #         rand_bin = randint(0, N - 1)
-        #         self.bins.append(rand_bin)
 
         self.N = N
         self.sum_of_bins = []
@@ -38,10 +34,12 @@ class bin_packing:
     def get_fitness(self):
         total_sum = 0
         K = 2
-
+        bin_in_used = 0
         sum_of_bins = [0] * self.N
         # get weights and profits
         for item, _bin in enumerate(self.bins):
+            if sum_of_bins[_bin] == 0:
+                bin_in_used += 1
             sum_of_bins[_bin] += bin_packing.W[item]
 
         self.sum_of_bins = sum_of_bins
@@ -63,8 +61,6 @@ class bin_packing:
         self.bins[start:end] = shuff
 
     def calc_distance(self, other):
-        """ implementation of Kendall-tau distance between 2 genes
-            instructions for implementing taken from - https://arxiv.org/pdf/1408.4963v1.pdf """
 
         # Invert self.bins
         identity = sorted(self.bins)
