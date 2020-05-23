@@ -1,5 +1,7 @@
+import itertools
+import time
 from random import randint, shuffle
-from scipy.spatial import distance as scipy_dist
+from collections import OrderedDict
 
 
 class bin_packing:
@@ -45,7 +47,7 @@ class bin_packing:
         for s in sum_of_bins:
             total_sum += (s / bin_packing.C) ** K
 
-        fitness = total_sum / bin_in_used
+        fitness = total_sum / self.N
 
         return fitness
 
@@ -59,9 +61,54 @@ class bin_packing:
         self.bins[start:end] = shuff
 
     def calc_distance(self, other):
-        """ Calculating the euclidean distance between bins """
 
-        distance = round(scipy_dist.euclidean(self.bins, other.bins))
+        # Invert self.bins
+        identity = sorted(self.bins)
+        ui = []
+        for x in identity:
+            index = self.bins.index(x)
+            ui.append(identity[index])
+
+        ##################################################
+        _id = identity
+        x = other.bins
+        y = ui
+
+        id_x_Map = OrderedDict(zip(_id, x))
+        id_y_Map = OrderedDict(zip(_id, y))
+        r = []
+        for x_index, x_value in id_x_Map.items():
+            for y_index, y_value in id_y_Map.items():
+                if x_value == y_index:
+                    r.append(y_value)
+
+        ##################################################
+        x = r
+
+        values_checked = []
+        unorderd_xr = []
+        ordered_xr = []
+
+        for value in x:
+            values_to_right = []
+            for n in x[x.index(value) + 1:]:
+                values_to_right.append(n)
+            result = [i for i in values_to_right if i < value]
+            if len(result) != 0:
+                values_checked.append(value)
+                unorderd_xr.append(len(result))
+
+        value_ltValuePair = OrderedDict(zip(values_checked, unorderd_xr))
+
+        for key in sorted(value_ltValuePair):
+            # print key,value_ltValuePair[key]
+            ordered_xr.append(value_ltValuePair[key])
+
+        distance = sum(ordered_xr)
+
+        # print("Kendal Tau distance = ", distance)
+
+        # print("Calc distance method time: ", time.time() - start)
 
         return distance
 

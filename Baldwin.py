@@ -1,96 +1,99 @@
+from Genetic import Genome
 import random
-from copy import deepcopy
+
+# import utils
 
 N = 20
-POPSIZE = 1000
-Alphabet = ['1', '0']
-TARGET = []
+GA_POPSIZE = 1000
+Alphabet = ['', '1', '0']
 
 
-class baldwinEffect:
-    def __init__(self, random_object):
-        self.random_object = random_object
-        self.learning_iterations = 1000
-        self.N = N
+class BaldwinEffectProblem:
+    def __init__(self, data):
+        self.data = data
+        self.learning_steps = 1000
+        self.target_object = ''.join(random.choices(Alphabet, k=N))
 
-    def get_fitness(self):
-        """ Calc the fitness using the given equation """
-        unused_iterations = 1000
+    @staticmethod
+    def initialize_citizen():
+        random_object = [None] * N
 
-        # Local search
-        if self.random_object != TARGET:  # If the current object is not TARGET
-            for i in range(self.learning_iterations):
-                if self.random_object != TARGET:  # If the current object is not TARGET
-                    unused_iterations -= 1     # Decrease unused iterations counter
-                    # Convert the object to a new one
-                    new_object = self.change_object()
-                    # If new object is TARGET we will stop
-                    if new_object == TARGET:
+        # Creating random indices for each option
+        idx_list = [range(N)]
+        unknown_ind = random.choices(idx_list, k=N/2)   # Half indices for '?'
+        idx_list.remove(unknown_ind)
+
+        true_ind = random.choices(idx_list, k=N/4)      # Quarter of '1'
+        idx_list.remove(unknown_ind)
+
+        false_ind = random.choices(idx_list, k=N/4)     # Quarter of '0'
+
+        # Assign the matching value to each indices
+        for idx in unknown_ind:
+            random_object[idx] = '?'
+
+        for true_idx, false_idx in zip(true_ind, false_ind):
+            random_object[true_idx] = '1'
+            random_object[false_idx] = '0'
+
+        # Creating the new citizen
+        return Genome(random_object)
+
+    def calc_fitness(self, population):
+        for i in range(self.data.ga_popsize):
+            tries_left = 0
+            if self.is_solution_cadidate(population[i].str):
+                for j in range(self.learning_steps):
+                    updated_gene = self.update_string(population[i].str)
+                    if updated_gene == self.target_object:
+                        tries_left = self.learning_steps - j
                         break
+            population[i].fitness = 1 + ((19 * tries_left) / 1000)
 
-        fitness = 1 + (19 * (unused_iterations / 1000))
+    def is_solution_cadidate(self, citizen_gene):
+        for i in range(N):
+            if citizen_gene[i] != '?' and citizen_gene[i] != self.target_object[i]:
+                return False
+        return True
 
-        if fitness != 1:
-            print(fitness)
-
-        return fitness
-
-    def change_object(self):
-        """ Changing the object for local search """
-
-        # First we will find indices of all '?' in our random object
-        question_idx = [i for i, j in enumerate(self.random_object) if j == '?']
-        new_object = deepcopy(self.random_object)
-
-        for idx in question_idx:
-            # Choosing random bit
+    def update_string(self, citizen_gene):
+        assert (N == len(citizen_gene))
+        ques_marks = []
+        for i, entry in enumerate(citizen_gene):
+            if entry == '?':
+                ques_marks.append(i)
+        while len(ques_marks) > 0:
+            entry = random.choice(ques_marks)
+            ques_marks.remove(entry)
             bit = str(random.randint(0, 1))
-            # Assign the new random bit instead of '?'
-            new_object[idx] = bit
+            string_list = list(citizen_gene)
+            string_list[entry] = bit
+            citizen_gene = ''.join(string_list)
+        return citizen_gene
 
-        return new_object
+    def print_best(self, gav, iter_num):
+        print("Best: " + gav[0].str + " (" + str(gav[0].fitness) + ")")
+        # with open("output.txt", 'a') as file:
+        #     file.write("Best: " + gav[0].str + " (" + str(gav[0].fitness) + ")\n")
+        #     file.write("    Iteration number: " + str(iter_num) + "\n")
+        #     file.write("    Fitness average: " + str(np.mean(gav, self.data.ga_popsize), 3)) + "\n")
+        #     file.write("    Fitness deviation: " + str(round(utils.deviation(gav, self.data.ga_popsize), 3)) + "\n")
 
-    def set_obj(self, obj):
-        self.random_object = obj
+    def crossover(self, first_parent, second_parent):
+        tsize = N
+        spos = int(random.randint(0, 32767) % tsize)
+        return Genome(first_parent.str[0:spos] + second_parent.str[spos:tsize])
 
-    def shuffle(self, start, end):
-        shuff = self.random_object[start:end]
-        random.shuffle(shuff)
-        self.random_object[start:end] = shuff
+    def mutate(self, citizen):
+        tsize = N
+        ipos = int(random.randint(0, 32767) % tsize)
+        bit = random.randint(0, 2)
+        if bit == 2:
+            bit = '?'
+        bit = str(bit)
+        string_list = list(citizen.str)
+        string_list[ipos] = bit
+        citizen.str = ''.join(string_list)
 
-    def __str__(self):
-        return str(self.random_object)
-
-    def __getitem__(self, item):
-        return self.random_object[item]
-
-    def __len__(self):
-        return N
-
-
-def initialize_rand_object():
-    random_object = ['-1'] * N
-
-    # Creating random indices for each option
-    idx_list = list(range(N))
-
-    # Shuffle idx_list to generate random indices
-    random.shuffle(idx_list)
-
-    unknown_ind = idx_list[0:int(N / 2)]  # Half indices for '?'
-    true_ind = idx_list[int(N / 2):int(N / 2) + int(N / 4)]  # Quarter will be wrong
-    false_ind = idx_list[int(N / 2) + int(N / 4):]  # Quarter will be right
-
-    # Assign the matching value to each indices
-    for idx in unknown_ind:
-        random_object[idx] = '?'
-
-    for true_idx, false_idx in zip(true_ind, false_ind):
-        alphabet_choices = ['0', '1']
-
-        random_object[true_idx] = alphabet_choices[1]
-        random_object[false_idx] = alphabet_choices[0]
-
-    return random_object
-
-
+    def is_done(self, best):
+        return False
