@@ -40,6 +40,13 @@ def sort_by_values(list1, values):
     return sorted_list
 
 
+def is_dominates(p_1_1, p_1_2, p_2_1, p_2_2):
+    if (p_1_1 < p_2_1 and p_1_2 < p_2_2) or (p_1_1 <= p_2_1 and p_1_2 < p_2_2) or (p_1_1 < p_2_1 and p_1_2 <= p_2_2):
+        return True
+    else:
+        return False
+
+
 def non_dominated_sorting(objective_1, objective_2):
     # Initialize lists
     domination_list = [[] for i in range(0, len(objective_1))]
@@ -50,17 +57,14 @@ def non_dominated_sorting(objective_1, objective_2):
     for p in range(0, len(objective_1)):
         for q in range(0, len(objective_1)):
             # Check if p dominates q
-            if (objective_1[p] < objective_1[q] and objective_2[p] < objective_2[q]) or (
-                    objective_1[p] <= objective_1[q] and objective_2[p] < objective_2[q]) or (
-                    objective_1[p] < objective_1[q] and objective_2[p] <= objective_2[q]):
+            if is_dominates(objective_1[p], objective_2[p], objective_1[q], objective_2[q]):
                 if q not in domination_list[p]:
                     domination_list[p].append(q)
 
             # check if q dominates p
-            elif (objective_1[q] < objective_1[p] and objective_2[q] < objective_2[p]) or (
-                    objective_1[q] <= objective_1[p] and objective_2[q] < objective_2[p]) or (
-                    objective_1[q] < objective_1[p] and objective_2[q] <= objective_2[p]):
+            elif is_dominates(objective_1[q], objective_2[q], objective_1[p], objective_2[p]):
                 dominated_counter[p] = dominated_counter[p] + 1
+
         if dominated_counter[p] == 0:
             rank_list[p] = 0
 
@@ -73,7 +77,7 @@ def non_dominated_sorting(objective_1, objective_2):
         temp_list = []
         for p in front[i]:
             for q in domination_list[p]:
-                dominated_counter[q] = dominated_counter[q] - 1
+                dominated_counter[q] -= 1
                 if dominated_counter[q] == 0:
                     rank_list[q] = i + 1
                     if q not in temp_list:
@@ -82,7 +86,35 @@ def non_dominated_sorting(objective_1, objective_2):
         front.append(temp_list)
 
     del front[len(front) - 1]
-    return front
+    return front, rank_list
+
+
+def tournament(ranks, distances):
+    sample_space = list(range(len(ranks)))
+    participants = random.sample(sample_space, 5)
+
+    # Choosing first parent
+    best_idx = None
+    for participant in participants:
+        if best_idx is None or ranks[participant] > ranks[best_idx] or\
+                (ranks[participant] == ranks[best_idx] and distances[participant > distances[best_idx]]):
+            best_idx = participant
+
+    parent_1 = best_idx
+
+    # Choosing parent_2
+    participants = random.sample(sample_space, 5)
+
+    # Choosing first parent
+    best_idx = None
+    for participant in participants:
+        if best_idx is None or ranks[participant] > ranks[best_idx] or \
+                (ranks[participant] == ranks[best_idx] and distances[participant > distances[best_idx]]):
+            best_idx = participant
+
+    parent_2 = best_idx
+
+    return parent_1, parent_2
 
 
 # Function to calculate crowding distance
@@ -107,6 +139,8 @@ def crowding_distance(objective_1, objective_2, front):
     if norm_2 == 0:
         norm_2 = epsilon
 
+    if len(front) == 1:
+        return [0]
     # Calculating the distance
     for k in range(1, len_front - 1):
         # for objective 1
@@ -125,7 +159,7 @@ def two_point_crossover(parent_1, parent_2):
     while spos_2 <= spos_1:
         spos_2 = random.randint(0, n)
 
-    children = parent_1[:spos_1] + parent_2[spos_1:spos_2] + parent_2[spos_2:]
+    children = parent_1[:spos_1] + parent_2[spos_1:spos_2] + parent_1[spos_2:]
 
     if random.random() < 0.35:
         return mutation(children)
@@ -147,7 +181,7 @@ def mutation(children):
     return children
 
 
-def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=10):
+def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=100):
     global x1, x2, n
 
     # Main program starts here
@@ -179,65 +213,36 @@ def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=10):
             objective_2_list.append(function_2(population[i]))
 
         # Calculate min-pareto front using non dominated sotring
-        NSGA_solutions = non_dominated_sorting(objective_1_list, objective_2_list)
+        fronts, ranks = non_dominated_sorting(objective_1_list, objective_2_list)
 
         # Print list of best fronts for the current iteration
-        print(f"Front for iteration number {iteration} is : \n")
-        for point in NSGA_solutions[0]:
+        print(f"Best Front for iteration number {iteration} is : \n")
+        for point in fronts[0]:
             print(population[point], 3, end=" ")
-
         print("\n")
 
         # Calculate crowding distance
         crowding_distance_list = []
-        for i in range(0, len(NSGA_solutions)):
-            crowding_distance_list.append(
-                crowding_distance(objective_1_list[:], objective_2_list[:], NSGA_solutions[i][:]))
+        for i in range(0, len(fronts)):
+            crowding_distance_list.extend(
+                crowding_distance(objective_1_list[:], objective_2_list[:], fronts[i][:]))
 
-        temp_population = population[:]
+        print("Length of crowding distance is:", len(crowding_distance_list))
+        temp_population = []
         # Generating offsprings
-
-        while len(temp_population) != pop_size * 2:
-            # Choosing 2 random parents for crossover
-            spos_1 = random.randint(0, pop_size - 1)
-            spos_2 = random.randint(0, pop_size - 1)
-
-            while spos_1 == spos_2:
-                spos_2 = random.randint(0, pop_size - 1)
+        while len(temp_population) != pop_size:
+            # Running a tournament
+            idx_1, idx_2 = tournament(ranks, crowding_distance_list)
 
             # Two point crossover + mutation
-            temp_population.append(two_point_crossover(population[spos_1], population[spos_2]))
+            temp_population.append(two_point_crossover(population[idx_1], population[idx_2]))
 
-        # Calculate objectives values for the new population
-        function1_values2 = [function_1(temp_population[i]) for i in range(0, 2 * pop_size)]
-        function2_values2 = [function_2(temp_population[i]) for i in range(0, 2 * pop_size)]
-        non_dominated_sorted_solution2 = non_dominated_sorting(function1_values2, function2_values2)
+        population = temp_population
 
-        # Calculate crowding distance for the new population
-        crowding_distance_values2 = []
-        for i in range(0, len(non_dominated_sorted_solution2)):
-            crowding_distance_values2.append(
-                crowding_distance(function1_values2[:], function2_values2[:], non_dominated_sorted_solution2[i][:]))
+        print("Finish new_fronts")
 
-        new_solution = []
-        for i in range(0, len(non_dominated_sorted_solution2)):
-            non_dominated_sorted_solution2_1 = [
-                index_of(non_dominated_sorted_solution2[i][j], non_dominated_sorted_solution2[i]) for j in
-                range(0, len(non_dominated_sorted_solution2[i]))]
-
-            front22 = sort_by_values(non_dominated_sorted_solution2_1[:], crowding_distance_values2[i][:])
-
-            front = [non_dominated_sorted_solution2[i][front22[j]] for j in
-                     range(len(non_dominated_sorted_solution2[i]))]
-
-            for value in front:
-                new_solution.append(value)
-
-                if len(new_solution) == pop_size:
-                    break
-
-            population = [temp_population[i] for i in new_solution]
-            iteration += 1
+        print("Finish iterating")
+        iteration += 1
 
     plt.xlabel('Objective 1', fontsize=15)
     plt.ylabel('Objective 2', fontsize=15)
