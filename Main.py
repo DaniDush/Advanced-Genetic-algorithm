@@ -4,6 +4,7 @@ import Genetic
 from Const import probs
 from MinimalConflicts import minimal_conflicts
 from BinPacking import bin_packing
+import NSGA_2
 
 GA_MAXITER = 150
 KS_MAXITER = 30
@@ -147,6 +148,8 @@ def print_nqueens_board(final_board, N):
 
 
 def main():
+    NSGA_2.NSGA_2_Solver()
+    return
     inp = None
     problem = int(input("Insert 0 for N Queens, 1 for Knap sack, 2 for String problem, 3 for Bin packing problem : "))
     if problem == 0:
