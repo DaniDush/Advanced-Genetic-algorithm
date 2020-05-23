@@ -7,11 +7,10 @@ from NQueens import n_queens
 from KnapSack import knap_sack
 from BoolPegia import bool_pgia
 from BinPacking import bin_packing
+import Baldwin
 
-GA_POPSIZE = 100
-GA_MAXITER = 16384
-GA_ELITRATE = 0.2
-GA_MUTATIONRATE = 0.25
+GA_POPSIZE = 1000
+GA_ELITRATE = 0.1
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
 
@@ -20,12 +19,14 @@ WEIGHT_BOUND = 100
 
 class Genome:
     """ Genome class """
+    num_of_mutations = 1
 
     def __init__(self, gene, fitness=0):
         """ Constructor """
         self.gene = gene  # the string
         self.fitness = fitness  # its fitness
         self.age = 0  # for aging
+        self.species = -1
 
     def __gt__(self, other):
         """ Override comparison method (for sorting) """
@@ -40,28 +41,35 @@ class Genome:
 
     def mutate(self):
         """ Basic mutation implementation """
-        tsize = len(self.gene)
-        ipos = randint(0, tsize - 1)
-        delta = randint(32, 122)
-        self.gene[ipos] = chr((ord(self.gene[ipos]) + delta) % 122)
+        for i in range(Genome.num_of_mutations):
+
+            tsize = len(self.gene)
+            ipos = randint(0, tsize - 1)
+            delta = randint(32, 122)
+            self.gene[ipos] = chr((ord(self.gene[ipos]) + delta) % 122)
 
     def swap_mutation(self):
         """ Swap mutation - randomly pick 2 indexes and swap their values"""
         tsize = len(self.gene)
-        ipos_1 = randint(0, tsize - 1)
-        ipos_2 = randint(0, tsize - 1)
-        while ipos_1 == ipos_2:
-            ipos_2 = randint(0, tsize - 1)
 
-        self.gene[ipos_1], self.gene[ipos_2] = self.gene[ipos_2], self.gene[ipos_1]
+        for i in range(Genome.num_of_mutations):
+
+            ipos_1 = randint(0, tsize - 1)
+            ipos_2 = randint(0, tsize - 1)
+            while ipos_1 == ipos_2:
+                ipos_2 = randint(0, tsize - 1)
+
+            self.gene[ipos_1], self.gene[ipos_2] = self.gene[ipos_2], self.gene[ipos_1]
 
     def scramble_mutation(self):
         """ Scramble mutation - Choose 2 random indexes and shuffle the string within that range """
-        tsize = len(self.gene)
-        ipos_1 = randint(0, int(tsize / 2) - 1)
-        ipos_2 = randint(ipos_1 + 1, tsize - 1)
+        for i in range(Genome.num_of_mutations):
 
-        self.gene.shuffle(ipos_1, ipos_2)
+            tsize = len(self.gene)
+            ipos_1 = randint(0, int(tsize / 2) - 1)
+            ipos_2 = randint(ipos_1 + 1, tsize - 1)
+
+            self.gene.shuffle(ipos_1, ipos_2)
 
     def aging(self):
         """ Adding age cost calculated by MSE from the optimal age. """
@@ -75,20 +83,22 @@ class Genome:
 
 class Population:
 
-    def __init__(self, problem=0, speciation_threshold=4):
+    def __init__(self, problem=0):
         self.genomes = []
         self.buffer = []
         self.problem = problem
         self.species_list = []
-        self.speciation_threshold = speciation_threshold
+        self.speciation_threshold = 12.7
         self.optimal_species = 30
         self.distance_matrix = []
+        self.mutation_rate = 0
 
-    def init_population(self, N=None):
+    def init_population(self, N=None, mutation_rate=0.25):
         """ Population initialize - if is_queen is True we will generate random permutation of integers with the given
             range. """
+        global GA_POPSIZE
+        self.mutation_rate = mutation_rate
 
-        tsize = len(GA_TARGET)
         #   Solving N Queens problem
         if self.problem == 0:
             for i in range(GA_POPSIZE):
@@ -106,25 +116,38 @@ class Population:
         #   Solving String problem
         elif self.problem == 2:
             for i in range(GA_POPSIZE):
-                _bool = bool_pgia(GA_TARGET, tsize)
+                _bool = bool_pgia(GA_TARGET, N)
                 self.genomes.append(Genome(gene=_bool))
                 self.buffer.append(Genome(gene=bool_pgia(GA_TARGET)))
 
         #   Solving Bin packing problem
-        else:
+        elif self.problem == 3:
             for i in range(GA_POPSIZE):
                 bins = bin_packing(N, False)
                 self.genomes.append(Genome(gene=bins))
                 self.buffer.append(Genome(gene=bin_packing(N, True)))
 
-    def calc_fitness(self):
+        #   Running Baldwin effect experiment
+        elif self.problem == 4:
+            GA_POPSIZE = Baldwin.POPSIZE
+            # Create random target
+            random_target = list(''.join(random.choices(Baldwin.Alphabet, k=Baldwin.N)))
+            Baldwin.TARGET = random_target
+
+            for i in range(GA_POPSIZE):
+                rand_obj = Baldwin.initialize_rand_object()
+                experiment = Baldwin.baldwinEffect(rand_obj)
+                self.genomes.append(Genome(gene=experiment, fitness=1))
+                self.buffer.append(Genome(gene=Baldwin.baldwinEffect([])))
+
+    def calc_fitness(self, idx):
         for i in range(GA_POPSIZE):
             temp_fitness = self.genomes[i].calc_individual_fitness()
             self.genomes[i].fitness = temp_fitness
 
     def sort_by_fitness(self):
         # If its maximize problem
-        if self.problem == 1 or self.problem == 3:
+        if self.problem == 1 or self.problem == 3 or self.problem == 4:
             self.genomes.sort(reverse=True)  # Sort population using its fitness
         else:
             self.genomes.sort()  # Sort population using its fitness
@@ -139,9 +162,6 @@ class Population:
 
         # Taking the best citizens
         self.elitism(esize)
-
-        # Fitness share method
-        # self.fitness_share()
 
         # If we choose parent selection then we will choose parents as the number of psize-esize
         if selection_method == 1:
@@ -177,7 +197,7 @@ class Population:
     def calc_avg_std(self):
         """ 1.1. Calculate and report avg fitness value of each generation in population
             + Calculate the std from mean"""
-        arr_size = len(self.genomes)
+        arr_size = GA_POPSIZE
         fitness_array = np.empty(arr_size)
 
         for idx, citizen in enumerate(self.genomes):
@@ -204,7 +224,8 @@ class Population:
             obj = self.genomes[i1].gene[:spos] + self.genomes[i2].gene[spos:]
 
             self.buffer[i].gene.set_obj(obj=obj)
-            if random.random() < GA_MUTATIONRATE:
+
+            if random.random() < self.mutation_rate:
                 if self.problem == 2:
                     Genome.mutate(self.buffer[i])
                 else:
@@ -226,7 +247,7 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
+            if random.random() < self.mutation_rate:
                 Genome.scramble_mutation(self.buffer[i])
 
     def uniform_crossover(self, esize):
@@ -245,7 +266,7 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
+            if random.random() < self.mutation_rate:
                 self.buffer[i].mutate()
 
     def ordered_crossover(self, esize):
@@ -259,6 +280,14 @@ class Population:
             # picking 2 genomes
             i1 = randint(0, GA_POPSIZE - 2)
             i2 = randint(i1, GA_POPSIZE - 1)
+
+            max_search = 10
+
+            if len(self.species_list) > 1:
+                # Finding citizens from other species
+                while self.genomes[i1].species == self.genomes[i2].species and max_search > 0:
+                    max_search -= 1
+                    i2 = randint(0, GA_POPSIZE - 2)
 
             # picking 2 points
             spos_1 = randint(0, tsize - 2)
@@ -311,10 +340,7 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            # Calling probabilistic crowding
-            self.buffer[i] = self.probabilistic_crowding(self.genomes[i1], self.genomes[i2], self.buffer[i])
-
-            if random.random() < GA_MUTATIONRATE:
+            if random.random() < self.mutation_rate:
                 Genome.swap_mutation(self.buffer[i])
 
     def CX_crossover(self, esize):
@@ -349,9 +375,9 @@ class Population:
 
             self.buffer[j + 1].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
+            if random.random() < self.mutation_rate:
                 Genome.scramble_mutation(self.buffer[j])
-            if random.random() < GA_MUTATIONRATE:
+            if random.random() < self.mutation_rate:
                 Genome.scramble_mutation(self.buffer[j + 1])
 
     def SUS(self, num_of_parents):
@@ -385,8 +411,19 @@ class Population:
         selected = []
         k = 6
         pr = 0.3
+
+        maximize = False
+
+        if self.problem == 4 or self.problem == 3 or self.problem == 1:
+            maximize = True
+
         while len(selected) < num_of_parents:
-            best_fitness = np.inf
+
+            if maximize:
+                best_fitness = -np.inf
+            else:
+                best_fitness = np.inf
+
             best_inv = None
 
             # Choose k random indexes from the population
@@ -394,9 +431,18 @@ class Population:
             if random.random() > pr * (1 - pr) ** len(selected):
                 # Getting the best gene
                 for inv in inv_to_check:
-                    if self.genomes[inv].fitness < best_fitness:
-                        best_fitness = self.genomes[inv].fitness
-                        best_inv = self.genomes[inv]
+                    # If we want to maximize fitness
+                    if maximize:
+                        if self.genomes[inv].fitness > best_fitness:
+                            best_fitness = self.genomes[inv].fitness
+                            best_inv = self.genomes[inv]
+
+                    # If we want to minimize fitness
+                    else:
+                        if self.genomes[inv].fitness < best_fitness:
+                            best_fitness = self.genomes[inv].fitness
+                            best_inv = self.genomes[inv]
+
                 selected.append(best_inv)
 
         return selected
@@ -409,25 +455,30 @@ class Population:
         """ Implementation of share fitness method for scaling fitness's"""
 
         start = time.time()
+        print("Sharing fitness")
 
         alpha = 1
-        sigma_share = 15500
+        sigma_share = 4.5
         tsize = self.genomes[0].gene.N
-        sharing_matrix = np.zeros((tsize, tsize))
-        print(tsize)
-
-        for i in range(0, tsize):
-            for j in range(i + 1, tsize):
-                sharing_matrix[i, j] = self.sharing_function(self.genomes[i].gene.calc_distance(self.genomes[j].gene),
-                                                             sigma_share=sigma_share, alpha=alpha)
+        sharing_matrix = np.zeros((GA_POPSIZE, GA_POPSIZE))
+        distance_matrix = []
+        for i in range(0, GA_POPSIZE):
+            for j in range(i + 1, GA_POPSIZE):
+                distance = self.genomes[i].gene.calc_distance(self.genomes[j].gene)/tsize
+                distance_matrix.append(distance)
+                sharing_matrix[i, j] = self.sharing_function(distance, sigma_share=sigma_share, alpha=alpha)
                 sharing_matrix[j, i] = sharing_matrix[i, j]
-        print("Finish scaling")
+
         if self.problem == 1 or self.problem == 3:
             for i in range(0, tsize):
-                self.genomes[i].fitness /= sum(sharing_matrix[i])
+                scaling_sum = sum(sharing_matrix[i])
+                if scaling_sum == 0: scaling_sum = 1
+                self.genomes[i].fitness /= scaling_sum
         else:
             for i in range(0, tsize):
-                self.genomes[i].fitness *= sum(sharing_matrix[i])
+                scaling_sum = sum(sharing_matrix[i])
+                if scaling_sum == 0: scaling_sum = 1
+                self.genomes[i].fitness *= scaling_sum
 
         print("Share fitness time: ", time.time() - start)
 
@@ -439,103 +490,95 @@ class Population:
             parent_1_chance = parent_1.fitness / (parent_1.fitness + parent_2.fitness)
             random_roll = random.random()
             # Set Winner
-            if random_roll <= parent_1_chance: winner = parent_1
-            else: winner = parent_2
+            if random_roll <= parent_1_chance:
+                winner = parent_1
+            else:
+                winner = parent_2
 
             # Now we will run it between the parent and the children
             children_fitness = children.gene.get_fitness()
 
             children_chance = children_fitness / (children_fitness + parent_2.fitness)
             random_roll = random.random()
-            if random_roll <= children_chance: winner = children
-            else: winner = winner
+            if random_roll <= children_chance:
+                winner = children
+            else:
+                winner = winner
 
             return winner
 
-    def handle_local_optima(self):
-        self.add_random_immigrants()
+    def hyper_mutation(self, new_rate, new_num_of_mutations):
+        """ Changing the mutation rate due to the quality of solutions """
+        Genome.num_of_mutations = new_num_of_mutations
+        self.mutation_rate = new_rate
 
-    def add_random_immigrants(self):
-        """ Adding random immigrants for the population by iterating over all of the population and replace citizen
-            by probability of 0.1 """
-
-        immigrants_indices = []
-        for i in range(GA_POPSIZE):
-            if self.genomes[0].gene.calc_distance(self.genomes[i].gene):
-                random_roll = random.random()
-
-                if random_roll <= 0.15:
-                    immigrants_indices.append(i)
-                    # Creating new citizen according to the problem were trying to solve
-                    if self.problem == 0:
-                        N = self.genomes[0].gene.N
-                        game = n_queens(N=N)
-                        self.genomes[i] = Genome(game)
-
-                    elif self.problem == 1:
-                        N = self.genomes[0].gene.N
-                        sack = knap_sack(N=N)
-                        self.genomes[i] = Genome(gene=sack)
-
-                    elif self.problem == 2:
-                        string_size = self.genomes[0].gene.size
-                        _bool = bool_pgia(GA_TARGET, string_size)
-                        self.genomes[i] = Genome(gene=_bool)
-
-                    else:
-                        N = self.genomes[0].gene.N
-                        bins = bin_packing(N, False)
-                        self.genomes[i] = Genome(gene=bins)
-
-        # Calc fitness for the new citizens
-        # for idx in immigrants_indices:
-        #     print(idx)
-        #     self.genomes[idx].gene.fitness = self.genomes[idx].gene.get_fitness()
-
-        self.calc_fitness()
-        # Sorting the new population
-        self.sort_by_fitness()
-
-    def make_species(self, phenotypes, adjust_threshold=True):
+    def make_species(self, adjust_threshold=True):
         """ Update species_list """
 
-        self.species_list = []
-        for p in phenotypes:
-            selected_species = self.find_species(p)
-            if len(selected_species) == 0:  # If we didnt find matching species we will ad one
-                self.species_list.append(selected_species)  # initialize a new population
+        self.species_list = [[0]]
+        for i in range(1, GA_POPSIZE):
+            selected_species, flag = self.find_species(i)
 
-            selected_species.append(p)
+            if flag is False and i != 0:  # If we didnt find matching species we will add one
+                self.species_list.append([])  # initialize a new species
 
-        if adjust_threshold:
-            self.adjust_speciation_threshold(phenotypes)
+            # Adding the citizen to the matching species
+            self.species_list[selected_species].append(i)
+
+        safe_range = 4
+        # Adjust the threshold:
+        if adjust_threshold and abs(len(self.species_list) - self.optimal_species) > safe_range:
+            self.adjust_speciation_threshold()
+
         return self.species_list
 
     def find_species(self, i):
         """searching for matching species from species_list"""
+        species_counter = 0
+        for j, species in enumerate(self.species_list):
+            distance = self.genomes[species[0]].gene.calc_distance(self.genomes[i].gene)/self.genomes[i].gene.N
+            if distance < self.speciation_threshold:
+                self.genomes[i].species = j
+                return j, True
 
-        for species in self.species_list:
-            if self.genomes[i].gene.calc_distance(species[0]) < self.speciation_threshold:
-                return species
+            species_counter += 1
+
         # If we didnt found matching species
-        return None
+        self.genomes[i].species = species_counter
+        return species_counter, False
 
-    def adjust_speciation_threshold(self, max_iterations=1):
+    def adjust_speciation_threshold(self, max_iterations=2):
         """Adjust the number of species to be around max_species"""
         iterations = 0
 
-        while len(
-                self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
+        while len(self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
             iterations += 1
             self.speciation_threshold += 1 * np.sign(len(self.species_list) - self.optimal_species)
             self.speciation_threshold = max(1, self.speciation_threshold)
-            self.species_list = self.make_species(self.genomes, adjust_threshold=False)
+            self.species_list = self.make_species(adjust_threshold=False)
 
-    def calc_similarity(self, citizen_one, citizen_two):
+    def calc_similarity(self):
+        # We will sample 10% of the population to measure distances
+        sampled_list = random.sample(range(GA_POPSIZE), round(GA_POPSIZE*10/100))
+        max_distance = 0
         distance = 0
-        tsize = self.genomes[0].gene.N
+        iterations = 0
 
-        for i in range(tsize):
-            if citizen_one.board[col] != citizen_two.board[col]:
-                similarity = similarity + 1
-        return round((similarity / self.data.queens_num), 3)
+        # Iterating over the sample list to compute distances
+        for i in sampled_list:
+            sampled_list.remove(i)
+            for j in sampled_list:
+                    iterations += 1
+                    new_distance = self.genomes[i].gene.calc_distance(self.genomes[j].gene)
+                    distance += new_distance
+
+                    if new_distance > max_distance:
+                        max_distance = new_distance
+
+        if distance != 0:
+            # Scaling the distance value to [0,2]
+            distance /= iterations
+            distance /= max_distance
+            distance += 1
+
+        return distance
