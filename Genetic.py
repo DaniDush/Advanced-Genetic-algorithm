@@ -7,6 +7,7 @@ from NQueens import n_queens
 from KnapSack import knap_sack
 from BoolPegia import bool_pgia
 from BinPacking import bin_packing
+import Baldwin
 
 GA_POPSIZE = 100
 GA_MAXITER = 16384
@@ -75,7 +76,7 @@ class Genome:
 
 class Population:
 
-    def __init__(self, problem=0, speciation_threshold=4):
+    def __init__(self, problem=0, speciation_threshold=6.3):
         self.genomes = []
         self.buffer = []
         self.problem = problem
@@ -111,11 +112,22 @@ class Population:
                 self.buffer.append(Genome(gene=bool_pgia(GA_TARGET)))
 
         #   Solving Bin packing problem
-        else:
+        elif self.problem == 3:
             for i in range(GA_POPSIZE):
                 bins = bin_packing(N, False)
                 self.genomes.append(Genome(gene=bins))
                 self.buffer.append(Genome(gene=bin_packing(N, True)))
+
+        #   Solving for Baldwin
+        elif self.problem == 4:
+            # Create random target
+            random_target = ''.join(random.choices(Baldwin.Alphabet, k=20))
+            Baldwin.target_object = list(random_target)
+
+            for i in range(1000):
+                rand_solution = Baldwin.BaldwinEffectProblem.initialize_citizen()
+                self.genomes.append(Genome(Baldwin.BaldwinEffectProblem(rand_solution=rand_solution)))
+                self.buffer.append(Genome(gene=Baldwin.BaldwinEffectProblem()))
 
     def calc_fitness(self):
         for i in range(GA_POPSIZE):
@@ -124,7 +136,7 @@ class Population:
 
     def sort_by_fitness(self):
         # If its maximize problem
-        if self.problem == 1 or self.problem == 3:
+        if self.problem == 1 or self.problem == 3 or self.problem == 4:
             self.genomes.sort(reverse=True)  # Sort population using its fitness
         else:
             self.genomes.sort()  # Sort population using its fitness
@@ -139,9 +151,6 @@ class Population:
 
         # Taking the best citizens
         self.elitism(esize)
-
-        # Fitness share method
-        # self.fitness_share()
 
         # If we choose parent selection then we will choose parents as the number of psize-esize
         if selection_method == 1:
@@ -311,9 +320,6 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            # Calling probabilistic crowding
-            self.buffer[i] = self.probabilistic_crowding(self.genomes[i1], self.genomes[i2], self.buffer[i])
-
             if random.random() < GA_MUTATIONRATE:
                 Genome.swap_mutation(self.buffer[i])
 
@@ -407,135 +413,102 @@ class Population:
 
     def fitness_share(self):
         """ Implementation of share fitness method for scaling fitness's"""
-
-        start = time.time()
-
         alpha = 1
-        sigma_share = 15500
+        sigma_share = 4.5
         tsize = self.genomes[0].gene.N
-        sharing_matrix = np.zeros((tsize, tsize))
-        print(tsize)
 
-        for i in range(0, tsize):
-            for j in range(i + 1, tsize):
-                sharing_matrix[i, j] = self.sharing_function(self.genomes[i].gene.calc_distance(self.genomes[j].gene),
-                                                             sigma_share=sigma_share, alpha=alpha)
+        sharing_matrix = np.zeros((GA_POPSIZE, GA_POPSIZE))
+        distance_matrix = []
+        for i in range(0, GA_POPSIZE):
+            for j in range(i + 1, GA_POPSIZE):
+                distance = self.genomes[i].gene.calc_distance(self.genomes[j].gene) / tsize
+                distance_matrix.append(distance)
+                sharing_matrix[i, j] = self.sharing_function(distance, sigma_share=sigma_share, alpha=alpha)
                 sharing_matrix[j, i] = sharing_matrix[i, j]
-        print("Finish scaling")
-        if self.problem == 1 or self.problem == 3:
+
+        if self.problem == 1 or self.problem == 3 or self.problem == 4:
             for i in range(0, tsize):
-                self.genomes[i].fitness /= sum(sharing_matrix[i])
+                scaling_sum = sum(sharing_matrix[i])
+                if scaling_sum == 0: scaling_sum = 1
+                self.genomes[i].fitness /= scaling_sum
         else:
             for i in range(0, tsize):
-                self.genomes[i].fitness *= sum(sharing_matrix[i])
+                scaling_sum = sum(sharing_matrix[i])
+                if scaling_sum == 0: scaling_sum = 1
+                self.genomes[i].fitness *= scaling_sum
 
-        print("Share fitness time: ", time.time() - start)
+    def hyper_mutation(self, new_rate, new_num_of_mutations):
+        """ Changing the mutation rate due to the quality of solutions """
+        Genome.num_of_mutations = new_num_of_mutations
+        self.mutation_rate = new_rate
 
-    @staticmethod
-    def probabilistic_crowding(parent_1, parent_2, children=None, is_crossover=True):
-        """ Probabilistic Crowding, We will run a tournament and save the winner to the next generation """
-        if is_crossover:
-            # First we will run a competition between parents
-            parent_1_chance = parent_1.fitness / (parent_1.fitness + parent_2.fitness)
-            random_roll = random.random()
-            # Set Winner
-            if random_roll <= parent_1_chance: winner = parent_1
-            else: winner = parent_2
+    def make_species(self, adjust_threshold=True):
+        """ Make species_list """
 
-            # Now we will run it between the parent and the children
-            children_fitness = children.gene.get_fitness()
+        self.species_list = [[0]]
+        for i in range(1, GA_POPSIZE):
+            selected_species, flag = self.find_species(i)
 
-            children_chance = children_fitness / (children_fitness + parent_2.fitness)
-            random_roll = random.random()
-            if random_roll <= children_chance: winner = children
-            else: winner = winner
+            if flag is False and i != 0:  # If we didnt find matching species we will add one
+                self.species_list.append([])  # initialize a new species
 
-            return winner
+            # Adding the citizen to the matching species
+            self.species_list[selected_species].append(i)
 
-    def handle_local_optima(self):
-        self.add_random_immigrants()
+        safe_range = 4
+        # Adjust the threshold:
+        if adjust_threshold and abs(len(self.species_list) - self.optimal_species) > safe_range:
+            self.adjust_speciation_threshold()
 
-    def add_random_immigrants(self):
-        """ Adding random immigrants for the population by iterating over all of the population and replace citizen
-            by probability of 0.1 """
-
-        immigrants_indices = []
-        for i in range(GA_POPSIZE):
-            if self.genomes[0].gene.calc_distance(self.genomes[i].gene):
-                random_roll = random.random()
-
-                if random_roll <= 0.15:
-                    immigrants_indices.append(i)
-                    # Creating new citizen according to the problem were trying to solve
-                    if self.problem == 0:
-                        N = self.genomes[0].gene.N
-                        game = n_queens(N=N)
-                        self.genomes[i] = Genome(game)
-
-                    elif self.problem == 1:
-                        N = self.genomes[0].gene.N
-                        sack = knap_sack(N=N)
-                        self.genomes[i] = Genome(gene=sack)
-
-                    elif self.problem == 2:
-                        string_size = self.genomes[0].gene.size
-                        _bool = bool_pgia(GA_TARGET, string_size)
-                        self.genomes[i] = Genome(gene=_bool)
-
-                    else:
-                        N = self.genomes[0].gene.N
-                        bins = bin_packing(N, False)
-                        self.genomes[i] = Genome(gene=bins)
-
-        # Calc fitness for the new citizens
-        # for idx in immigrants_indices:
-        #     print(idx)
-        #     self.genomes[idx].gene.fitness = self.genomes[idx].gene.get_fitness()
-
-        self.calc_fitness()
-        # Sorting the new population
-        self.sort_by_fitness()
-
-    def make_species(self, phenotypes, adjust_threshold=True):
-        """ Update species_list """
-
-        self.species_list = []
-        for p in phenotypes:
-            selected_species = self.find_species(p)
-            if len(selected_species) == 0:  # If we didnt find matching species we will ad one
-                self.species_list.append(selected_species)  # initialize a new population
-
-            selected_species.append(p)
-
-        if adjust_threshold:
-            self.adjust_speciation_threshold(phenotypes)
         return self.species_list
+
 
     def find_species(self, i):
         """searching for matching species from species_list"""
+        species_counter = 0
+        for j, species in enumerate(self.species_list):
+            distance = self.genomes[species[0]].gene.calc_distance(self.genomes[i].gene) / self.genomes[i].gene.N
+            if distance < self.speciation_threshold:
+                self.genomes[i].species = j
+                return j, True
 
-        for species in self.species_list:
-            if self.genomes[i].gene.calc_distance(species[0]) < self.speciation_threshold:
-                return species
-        # If we didnt found matching species
-        return None
+            species_counter += 1
 
-    def adjust_speciation_threshold(self, max_iterations=1):
+        self.genomes[i].species = species_counter
+        return species_counter, False
+
+    def adjust_speciation_threshold(self, max_iterations=2):
         """Adjust the number of species to be around max_species"""
         iterations = 0
 
-        while len(
-                self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
+        while len(self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
             iterations += 1
             self.speciation_threshold += 1 * np.sign(len(self.species_list) - self.optimal_species)
             self.speciation_threshold = max(1, self.speciation_threshold)
-            self.species_list = self.make_species(self.genomes, adjust_threshold=False)
+            self.species_list = self.make_species(adjust_threshold=False)
 
-    def calc_similarity(self, citizen_one, citizen_two):
+    def calc_similarity(self):
+        # We will sample 10% of the population to measure distances
+        sampled_list = random.sample(range(GA_POPSIZE), round(GA_POPSIZE * 10 / 100))
+        max_distance = 0
         distance = 0
-        tsize = self.genomes[0].gene.N
 
-        for i in range(tsize):
-            if citizen_one.board[col] != citizen_two.board[col]:
-                similarity = similarity + 1
-        return round((similarity / self.data.queens_num), 3)
+        iterations = 0
+        # Iterating over the sample list to compute distances
+        for i in sampled_list:
+            sampled_list.remove(i)
+            for j in sampled_list:
+                iterations += 1
+                new_distance = self.genomes[i].gene.calc_distance(self.genomes[j].gene)
+                distance += new_distance
+
+                if new_distance > max_distance:
+                    max_distance = new_distance
+
+        if distance != 0:
+            # Scaling the distance value to [0,2]
+            distance /= iterations
+            distance /= max_distance
+            distance += 1
+
+        return distance

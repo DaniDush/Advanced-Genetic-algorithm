@@ -1,83 +1,65 @@
-from Genetic import Genome
 import random
-
-# import utils
+from copy import deepcopy
 
 N = 20
 GA_POPSIZE = 1000
-Alphabet = ['', '1', '0']
+Alphabet = ['1', '0']
+local_iterations = 1000
+target_object = ''.join(random.choices(Alphabet, k=N))
 
 
 class BaldwinEffectProblem:
-    def __init__(self, data):
-        self.data = data
-        self.learning_steps = 1000
-        self.target_object = ''.join(random.choices(Alphabet, k=N))
+    def __init__(self, rand_solution=None):
+        self.solution = rand_solution
 
     @staticmethod
     def initialize_citizen():
         random_object = [None] * N
 
-        # Creating random indices for each option
-        idx_list = [range(N)]
-        unknown_ind = random.choices(idx_list, k=N/2)   # Half indices for '?'
-        idx_list.remove(unknown_ind)
+        # Creating random indices for each option by shuffle indices list
+        idx_list = list(range(N))
+        random.shuffle(idx_list)
 
-        true_ind = random.choices(idx_list, k=N/4)      # Quarter of '1'
-        idx_list.remove(unknown_ind)
+        unknown_idx = idx_list[:int(N/2)]
+        true_idx = idx_list[int(N/2):int(N/2)+int(N/4)]
+        false_idx = idx_list[int(N/2)+int(N/4):]
 
-        false_ind = random.choices(idx_list, k=N/4)     # Quarter of '0'
-
-        # Assign the matching value to each indices
-        for idx in unknown_ind:
+        for idx in unknown_idx:
             random_object[idx] = '?'
 
-        for true_idx, false_idx in zip(true_ind, false_ind):
-            random_object[true_idx] = '1'
-            random_object[false_idx] = '0'
+        for true, false in zip(true_idx, false_idx):
+            random_object[true] = '1'
+            random_object[false] = '0'
 
         # Creating the new citizen
-        return Genome(random_object)
+        return random_object
 
-    def calc_fitness(self, population):
-        for i in range(self.data.ga_popsize):
-            tries_left = 0
-            if self.is_solution_cadidate(population[i].str):
-                for j in range(self.learning_steps):
-                    updated_gene = self.update_string(population[i].str)
-                    if updated_gene == self.target_object:
-                        tries_left = self.learning_steps - j
-                        break
-            population[i].fitness = 1 + ((19 * tries_left) / 1000)
+    def get_fitness(self):
+        # Running local search to adapt the fitness value
+        unused_tries = 1000
+        if self.solution != target_object:
+            unused_tries -= 1
+            for j in range(local_iterations):
+                temp_gene = self.change_solution()
+                # If its a match
+                if temp_gene == target_object:
+                    return 1 + ((19 * unused_tries) / 1000)
 
-    def is_solution_cadidate(self, citizen_gene):
-        for i in range(N):
-            if citizen_gene[i] != '?' and citizen_gene[i] != self.target_object[i]:
-                return False
-        return True
+            # if we didnt find solution in the local search
+            return 1
 
-    def update_string(self, citizen_gene):
-        assert (N == len(citizen_gene))
-        ques_marks = []
-        for i, entry in enumerate(citizen_gene):
-            if entry == '?':
-                ques_marks.append(i)
-        while len(ques_marks) > 0:
-            entry = random.choice(ques_marks)
-            ques_marks.remove(entry)
-            bit = str(random.randint(0, 1))
-            string_list = list(citizen_gene)
-            string_list[entry] = bit
-            citizen_gene = ''.join(string_list)
-        return citizen_gene
+    def change_solution(self):
+        """ Creating new solution for the local search, we will replace '?' with '0' or '1' """
+        new_solution = deepcopy(self.solution)
+        # Find indices of question marks
+        question_indices = [i for i, x in enumerate(self.solution) if x == '?']
 
-    def print_best(self, gav, iter_num):
-        print("Best: " + gav[0].str + " (" + str(gav[0].fitness) + ")")
-        # with open("output.txt", 'a') as file:
-        #     file.write("Best: " + gav[0].str + " (" + str(gav[0].fitness) + ")\n")
-        #     file.write("    Iteration number: " + str(iter_num) + "\n")
-        #     file.write("    Fitness average: " + str(np.mean(gav, self.data.ga_popsize), 3)) + "\n")
-        #     file.write("    Fitness deviation: " + str(round(utils.deviation(gav, self.data.ga_popsize), 3)) + "\n")
+        for i in question_indices:
+            # Choosing bit from ['0','1']
+            bit = random.choice(Alphabet)
+            new_solution[i] = bit
+
+        return new_solution
 
     def crossover(self, first_parent, second_parent):
         tsize = N
@@ -94,6 +76,3 @@ class BaldwinEffectProblem:
         string_list = list(citizen.str)
         string_list[ipos] = bit
         citizen.str = ''.join(string_list)
-
-    def is_done(self, best):
-        return False

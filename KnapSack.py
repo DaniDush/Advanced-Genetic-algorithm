@@ -1,5 +1,6 @@
 from random import shuffle, randint
 from Const import probs
+from scipy.spatial import distance as scipy_dist
 
 WL = 0
 W = []
@@ -55,6 +56,13 @@ class knap_sack:
         shuff = self.sack[start:end]
         shuffle(shuff)
         self.sack[start:end] = shuff
+
+    def calc_distance(self, other):
+        """ Calculating the euclidean distance between sacks """
+
+        distance = round(scipy_dist.euclidean(self.sack, other.bins))
+
+        return distance
 
     def __repr__(self):
         return str(self.sack)
