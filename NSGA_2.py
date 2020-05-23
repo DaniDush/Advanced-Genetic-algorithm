@@ -2,16 +2,15 @@ import math
 import random
 import matplotlib.pyplot as plt
 import numpy as np
-from copy import deepcopy
 
-MAX_ITER = 100
+MAX_ITER = 1000
 x1 = 0
 x2 = 0
 n = 0
 
 
-# First function to optimize
 def function_1(x_vector):
+    """ First function to optimize """
     y = 0
 
     for x in x_vector:
@@ -20,8 +19,9 @@ def function_1(x_vector):
     return y
 
 
-# Second function to optimize
 def function_2(x_vector):
+    """ Second function to optimize """
+
     y = 0
 
     for x in x_vector:
@@ -151,14 +151,16 @@ def crowding_distance(objective_1, objective_2, front):
     return distance
 
 
-# Function to carry out the crossover
 def two_point_crossover(parent_1, parent_2):
+    """ Regular two point crossover as in Genetic """
+
     spos_1 = random.randint(0, n - 1)
     spos_2 = random.randint(0, n)
 
     while spos_2 <= spos_1:
         spos_2 = random.randint(0, n)
 
+    # Creating children
     children = parent_1[:spos_1] + parent_2[spos_1:spos_2] + parent_1[spos_2:]
 
     if random.random() < 0.35:
@@ -174,14 +176,14 @@ def index_of(a, list_to_serach):
     return -1
 
 
-# Function to carry out the mutation operator
 def mutation(children):
+    """ Mutation that will replace 1 randomly chosen element to a random x"""
     rand_idx = random.randint(0, n)
     children[rand_idx] = x1 + (x2 - x1) * random.random()
     return children
 
 
-def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=100):
+def NSGA_2_Solver(x_1=-0.99, x_2=0.99, vector_len=8, population_size=100):
     global x1, x2, n
 
     # Main program starts here
@@ -202,6 +204,7 @@ def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=100):
         vector = [x1 + (x2 - x1) * random.random() for i in range(0, n + 1)]
         population.append(vector)
 
+    # Start iterating
     iteration = 0
     while iteration < max_iter:
         objective_1_list = []
@@ -227,7 +230,6 @@ def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=100):
             crowding_distance_list.extend(
                 crowding_distance(objective_1_list[:], objective_2_list[:], fronts[i][:]))
 
-        print("Length of crowding distance is:", len(crowding_distance_list))
         temp_population = []
         # Generating offsprings
         while len(temp_population) != pop_size:
@@ -238,10 +240,6 @@ def NSGA_2_Solver(x_1=-50, x_2=50, vector_len=5, population_size=100):
             temp_population.append(two_point_crossover(population[idx_1], population[idx_2]))
 
         population = temp_population
-
-        print("Finish new_fronts")
-
-        print("Finish iterating")
         iteration += 1
 
     plt.xlabel('Objective 1', fontsize=15)
