@@ -1,4 +1,3 @@
-import itertools
 from collections import OrderedDict
 from random import shuffle
 import numpy as np

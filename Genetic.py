@@ -1,4 +1,3 @@
-import time
 from random import randint, shuffle
 import random
 import numpy as np
@@ -9,14 +8,13 @@ from BoolPegia import bool_pgia
 from BinPacking import bin_packing
 import Baldwin
 
-GA_POPSIZE = 100
-GA_MAXITER = 16384
-GA_ELITRATE = 0.2
+GA_POPSIZE = 1000
+GA_ELITRATE = 0.15
 GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
-
 WEIGHT_BOUND = 100
+
 
 
 class Genome:
@@ -36,33 +34,56 @@ class Genome:
         """ calculation of our gene score with chosen heuristic and aging score """
         temp_fitness = self.gene.get_fitness()
         # Adding extra aging score
-        temp_fitness += self.aging()
+        # temp_fitness += self.aging()
         return temp_fitness
 
-    def mutate(self):
+    def mutate(self, num_of_mutations):
         """ Basic mutation implementation """
-        tsize = len(self.gene)
-        ipos = randint(0, tsize - 1)
-        delta = randint(32, 122)
-        self.gene[ipos] = chr((ord(self.gene[ipos]) + delta) % 122)
+        for i in range(num_of_mutations):
+            tsize = len(self.gene)
+            ipos = randint(0, tsize - 1)
+            delta = randint(32, 122)
+            self.gene[ipos] = chr((ord(self.gene[ipos]) + delta) % 122)
 
-    def swap_mutation(self):
+    def swap_mutation(self, num_of_mutations):
         """ Swap mutation - randomly pick 2 indexes and swap their values"""
-        tsize = len(self.gene)
-        ipos_1 = randint(0, tsize - 1)
-        ipos_2 = randint(0, tsize - 1)
-        while ipos_1 == ipos_2:
+        for i in range(num_of_mutations):
+            tsize = len(self.gene)
+            ipos_1 = randint(0, tsize - 1)
             ipos_2 = randint(0, tsize - 1)
+            while ipos_1 == ipos_2:
+                ipos_2 = randint(0, tsize - 1)
+            self.gene[ipos_1], self.gene[ipos_2] = self.gene[ipos_2], self.gene[ipos_1]
 
-        self.gene[ipos_1], self.gene[ipos_2] = self.gene[ipos_2], self.gene[ipos_1]
-
-    def scramble_mutation(self):
+    def scramble_mutation(self, num_of_mutations):
         """ Scramble mutation - Choose 2 random indexes and shuffle the string within that range """
-        tsize = len(self.gene)
-        ipos_1 = randint(0, int(tsize / 2) - 1)
-        ipos_2 = randint(ipos_1 + 1, tsize - 1)
+        for i in range(num_of_mutations):
+            tsize = len(self.gene)
+            ipos_1 = randint(0, int(tsize / 2) - 1)
+            ipos_2 = randint(ipos_1 + 1, tsize - 1)
 
-        self.gene.shuffle(ipos_1, ipos_2)
+            self.gene.shuffle(ipos_1, ipos_2)
+
+    def bit_flip(self):
+        tsize = len(self.gene)
+        ipos_1 = randint(0, tsize - 2)
+        ipos_2 = randint(0, tsize - 1)
+
+        while self.gene.solution[ipos_1] == '?':
+            ipos_1 = randint(0, tsize - 2)
+
+        while self.gene.solution[ipos_2] == '?':
+            ipos_2 = randint(0, tsize - 2)
+
+        if self.gene.solution[ipos_2] == '1':
+            self.gene.solution[ipos_2] = '0'
+        elif self.gene.solution[ipos_2] == '0':
+            self.gene.solution[ipos_2] = '1'
+
+        if self.gene.solution[ipos_1] == '1':
+            self.gene.solution[ipos_1] = '0'
+        elif self.gene.solution[ipos_1] == '0':
+            self.gene.solution[ipos_1] = '1'
 
     def aging(self):
         """ Adding age cost calculated by MSE from the optimal age. """
@@ -79,19 +100,23 @@ class Population:
     def __init__(self, problem=0, speciation_threshold=6.3):
         self.genomes = []
         self.buffer = []
+        self.mutation_rate = 0.25
         self.problem = problem
         self.species_list = []
         self.speciation_threshold = speciation_threshold
         self.optimal_species = 30
         self.distance_matrix = []
+        self.num_of_mutations = 1
 
     def init_population(self, N=None):
         """ Population initialize - if is_queen is True we will generate random permutation of integers with the given
             range. """
+        global GA_POPSIZE
 
         tsize = len(GA_TARGET)
         #   Solving N Queens problem
         if self.problem == 0:
+            GA_POPSIZE = 1000
             for i in range(GA_POPSIZE):
                 game = n_queens(N=N)
                 self.genomes.append(Genome(game))
@@ -106,6 +131,7 @@ class Population:
 
         #   Solving String problem
         elif self.problem == 2:
+            GA_POPSIZE = 5000
             for i in range(GA_POPSIZE):
                 _bool = bool_pgia(GA_TARGET, tsize)
                 self.genomes.append(Genome(gene=_bool))
@@ -113,6 +139,7 @@ class Population:
 
         #   Solving Bin packing problem
         elif self.problem == 3:
+            GA_POPSIZE = 400
             for i in range(GA_POPSIZE):
                 bins = bin_packing(N, False)
                 self.genomes.append(Genome(gene=bins))
@@ -122,12 +149,12 @@ class Population:
         elif self.problem == 4:
             # Create random target
             random_target = ''.join(random.choices(Baldwin.Alphabet, k=20))
-            Baldwin.target_object = list(random_target)
+            Baldwin.TARGET = list(random_target)
 
             for i in range(1000):
                 rand_solution = Baldwin.BaldwinEffectProblem.initialize_citizen()
-                self.genomes.append(Genome(Baldwin.BaldwinEffectProblem(rand_solution=rand_solution)))
-                self.buffer.append(Genome(gene=Baldwin.BaldwinEffectProblem()))
+                self.genomes.append(Genome(Baldwin.BaldwinEffectProblem(rand_solution=rand_solution), fitness=1))
+                self.buffer.append(Genome(gene=Baldwin.BaldwinEffectProblem(), fitness=1))
 
     def calc_fitness(self):
         for i in range(GA_POPSIZE):
@@ -160,7 +187,7 @@ class Population:
 
         elif selection_method == 2:
             num_of_parents = GA_POPSIZE - esize
-            self.genomes[esize:] = self.tournament_selection(num_of_parents=num_of_parents)
+            self.genomes[esize:] = self.tournament_selection(num_of_parents=num_of_parents, esize=esize)
 
         if cross_method == 1:
             self.one_point_crossover(esize=esize)
@@ -178,10 +205,36 @@ class Population:
             self.CX_crossover(esize=esize)
 
     def get_best_fitness(self):
-        return self.genomes[0].fitness
+        i = 0
+        size = len(self.genomes)
+        if self.problem == 3:
+            while True:
+                empty_bins = 0
+                flag = True
+                sum_of_bins = self.genomes[i].gene.create_sum_of_bins()
+
+                for _bin in sum_of_bins:
+                    if _bin == 0:
+                        empty_bins += 1
+                    if _bin > bin_packing.C:
+                        flag = False
+                        break
+
+                if flag is True:
+                    print(f"Number of empty bins for best individual is: {empty_bins}")
+                    return self.genomes[i]
+                elif i == size - 1:
+                    return None
+                else:
+                    i += 1
+
+        return self.genomes[i]
 
     def print_best(self):
-        print('Best: ', self.genomes[0].gene, '(', self.genomes[0].fitness, ')')
+        best_inv = self.get_best_fitness()
+        print('Best: ', best_inv.gene, '(', best_inv.fitness, ')')
+
+        return best_inv
 
     def calc_avg_std(self):
         """ 1.1. Calculate and report avg fitness value of each generation in population
@@ -194,6 +247,23 @@ class Population:
 
         avg_fitness = fitness_array.mean()
         std_fitness = fitness_array.std()
+
+        if self.problem == 4:
+            true_array = np.empty(arr_size)
+            false_array = np.empty(arr_size)
+            learned_array = np.empty(arr_size)
+
+            for idx, citizen in enumerate(self.genomes):
+                true_array[idx] = (citizen.gene.true_count / 20)
+                false_array[idx] = (citizen.gene.false_count / 20)
+                learned_array[idx] = citizen.gene.learn
+
+            avg_learned = learned_array.mean()
+            avg_true = true_array.mean()
+            avg_false = false_array.mean()
+            print(avg_true, avg_false, avg_learned)
+
+            return avg_fitness, std_fitness, avg_true, avg_false, avg_learned
 
         print('Average fitness:', avg_fitness, '\nStandard deviation: ', std_fitness, '\n')
 
@@ -213,11 +283,11 @@ class Population:
             obj = self.genomes[i1].gene[:spos] + self.genomes[i2].gene[spos:]
 
             self.buffer[i].gene.set_obj(obj=obj)
-            if random.random() < GA_MUTATIONRATE:
+            if random.random() < self.mutation_rate:
                 if self.problem == 2:
-                    Genome.mutate(self.buffer[i])
+                    Genome.mutate(self.buffer[i], self.num_of_mutations)
                 else:
-                    Genome.swap_mutation(self.buffer[i])
+                    Genome.swap_mutation(self.buffer[i], self.num_of_mutations)
 
     def two_point_crossover(self, esize):
         tsize = len(GA_TARGET)
@@ -235,8 +305,11 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
-                Genome.scramble_mutation(self.buffer[i])
+            if random.random() < self.mutation_rate:
+                if self.problem == 4:
+                    Genome.bit_flip(self.buffer[i])
+                else:
+                    Genome.scramble_mutation(self.buffer[i], self.num_of_mutations)
 
     def uniform_crossover(self, esize):
         tsize = len(self.genomes[0].gene)
@@ -254,8 +327,8 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
-                self.buffer[i].mutate()
+            if random.random() < self.mutation_rate:
+                self.buffer[i].mutate(self.num_of_mutations)
 
     def ordered_crossover(self, esize):
         tsize = self.genomes[0].gene.N
@@ -310,6 +383,8 @@ class Population:
                     else:
                         remains.append(val)
 
+                obj = obj_2[:spos_1] + obj_1 + obj_2[spos_1:]
+
                 # Insert missing values
                 if len(obj) < tsize:
                     for j in range(tsize):
@@ -320,8 +395,8 @@ class Population:
 
             self.buffer[i].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
-                Genome.swap_mutation(self.buffer[i])
+            if random.random() < self.mutation_rate:
+                self.buffer[i].swap_mutation(self.num_of_mutations)
 
     def CX_crossover(self, esize):
         tsize = len(self.genomes[0].gene)
@@ -355,10 +430,10 @@ class Population:
 
             self.buffer[j + 1].gene.set_obj(obj=obj)
 
-            if random.random() < GA_MUTATIONRATE:
-                Genome.scramble_mutation(self.buffer[j])
-            if random.random() < GA_MUTATIONRATE:
-                Genome.scramble_mutation(self.buffer[j + 1])
+            if random.random() < self.mutation_rate:
+                Genome.scramble_mutation(self.buffer[j], self.num_of_mutations)
+            if random.random() < self.mutation_rate:
+                Genome.scramble_mutation(self.buffer[j + 1], self.num_of_mutations)
 
     def SUS(self, num_of_parents):
         """ Parent selection method - Stochastic Universal Sampling (SUS)"""
@@ -386,13 +461,22 @@ class Population:
 
         return selected
 
-    def tournament_selection(self, num_of_parents):
+    def tournament_selection(self, num_of_parents, esize):
         """ choosing k individuals for a tournament, winner pass for crossover """
         selected = []
         k = 6
-        pr = 0.3
+        pr = 0.2
+
+        maximize = False
+
+        if self.problem == 4 or self.problem == 3 or self.problem == 1:
+            maximize = True
+
         while len(selected) < num_of_parents:
-            best_fitness = np.inf
+            if maximize:
+                best_fitness = -np.inf
+            else:
+                best_fitness = np.inf
             best_inv = None
 
             # Choose k random indexes from the population
@@ -400,9 +484,14 @@ class Population:
             if random.random() > pr * (1 - pr) ** len(selected):
                 # Getting the best gene
                 for inv in inv_to_check:
-                    if self.genomes[inv].fitness < best_fitness:
-                        best_fitness = self.genomes[inv].fitness
-                        best_inv = self.genomes[inv]
+                    if maximize:
+                        if self.genomes[inv].fitness > best_fitness:
+                            best_fitness = self.genomes[inv].fitness
+                            best_inv = self.genomes[inv]
+                    else:
+                        if self.genomes[inv].fitness < best_fitness:
+                            best_fitness = self.genomes[inv].fitness
+                            best_inv = self.genomes[inv]
                 selected.append(best_inv)
 
         return selected
@@ -439,7 +528,7 @@ class Population:
 
     def hyper_mutation(self, new_rate, new_num_of_mutations):
         """ Changing the mutation rate due to the quality of solutions """
-        Genome.num_of_mutations = new_num_of_mutations
+        self.num_of_mutations = int(new_num_of_mutations)
         self.mutation_rate = new_rate
 
     def make_species(self, adjust_threshold=True):
@@ -448,7 +537,6 @@ class Population:
         self.species_list = [[0]]
         for i in range(1, GA_POPSIZE):
             selected_species, flag = self.find_species(i)
-
             if flag is False and i != 0:  # If we didnt find matching species we will add one
                 self.species_list.append([])  # initialize a new species
 
@@ -462,12 +550,12 @@ class Population:
 
         return self.species_list
 
-
     def find_species(self, i):
         """searching for matching species from species_list"""
         species_counter = 0
         for j, species in enumerate(self.species_list):
             distance = self.genomes[species[0]].gene.calc_distance(self.genomes[i].gene) / self.genomes[i].gene.N
+
             if distance < self.speciation_threshold:
                 self.genomes[i].species = j
                 return j, True
@@ -477,13 +565,14 @@ class Population:
         self.genomes[i].species = species_counter
         return species_counter, False
 
-    def adjust_speciation_threshold(self, max_iterations=2):
+    def adjust_speciation_threshold(self, max_iterations=3):
         """Adjust the number of species to be around max_species"""
         iterations = 0
 
-        while len(self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
+        while len(
+                self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
             iterations += 1
-            self.speciation_threshold += 1 * np.sign(len(self.species_list) - self.optimal_species)
+            self.speciation_threshold += 1 * np.sign(len(self.species_list) - self.optimal_species) / (iterations + 2)
             self.speciation_threshold = max(1, self.speciation_threshold)
             self.species_list = self.make_species(adjust_threshold=False)
 

@@ -60,7 +60,7 @@ class knap_sack:
     def calc_distance(self, other):
         """ Calculating the euclidean distance between sacks """
 
-        distance = round(scipy_dist.euclidean(self.sack, other.bins))
+        distance = round(scipy_dist.euclidean(self.sack, other.sack))*self.N
 
         return distance
 

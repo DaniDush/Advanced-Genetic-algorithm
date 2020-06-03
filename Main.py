@@ -6,16 +6,17 @@ from Const import probs
 from MinimalConflicts import minimal_conflicts
 from BinPacking import bin_packing
 import NSGA_2
-import Baldwin
+import matplotlib.pyplot as plt
+import GeneticProgramming
 
 GA_MAXITER = 150
 KS_MAXITER = 30
 species_thres = [4.3, 6.3, 8.91, 12.7]
 
 
-def get_args():
+def get_args(question):
     problem_args = []
-    path = Path('Problems', '2.txt')
+    path = Path(f'{question}.txt')
     with open(path) as f:
         lines = f.readlines()
 
@@ -26,7 +27,7 @@ def get_args():
     C = int(problem_args[1])
     WEIGHTS = problem_args[2:]
 
-    return N, C, WEIGHTS
+    return N, C, WEIGHTS, species_thres[question-1]
 
 
 # TODO what we do if spos_1 == spos_2
@@ -42,19 +43,23 @@ def run_minimal_conflicts(N):
     print_nqueens_board(solution, N)
 
 
-def run_genetic_algo(problem, N):
+def run_genetic_algo(problem, N, question):
     print("Genetic Algorithm solution: \n")
     ######################################################################
     # Initialize local optima vars
-    similarity_threshold = 1.2
+    similarity_threshold = 1
     std_threshold = 0.2
-    local_optima_matrix = []
     local_optima_range = 5
+    local_optima_matrix = [0]*local_optima_range
     generation_std = []
     generation_avg_fitness = []
     generation_similarity = []
 
     ######################################################################
+    generation_true_count = []
+    generation_false_count = []
+    generation_learned = []
+    generation_species = []
     # Initialize algorithm vars
     cross_method = 2
     selection_method = 2
@@ -68,6 +73,7 @@ def run_genetic_algo(problem, N):
 
     # If its Knap Sack problem
     elif problem == 1:
+        spec_threshold = 1
         max_iter = KS_MAXITER
         selection_method = 0
         cross_method = 2
@@ -75,78 +81,93 @@ def run_genetic_algo(problem, N):
 
     # If its Bin packing problem
     elif problem == 3:
-        N, C, WEIGHTS = get_args()
+        std_threshold = 0.1
+        N, C, WEIGHTS, spec_threshold = get_args(question)
         bin_packing.W = WEIGHTS
         bin_packing.C = C
         cross_method = 4
 
     # If its Baldwin effect
     elif problem == 4:
+        max_iter = 50
         cross_method = 2
         selection_method = 2
 
     ######################################################################
-
     start_time = time()
-    current_population = Genetic.Population(problem=problem)
+    if problem == 3 or problem == 1:
+        current_population = Genetic.Population(problem=problem, speciation_threshold=spec_threshold)
+    else:
+        current_population = Genetic.Population(problem=problem)
+
     current_population.init_population(N=N)
-    epsilon = 0.2
+
     for i in range(max_iter):
         generation_start_time = time()
         current_population.calc_fitness()
-        if i > 1 and problem != 4:
-            current_population.calc_fitness()
-        # current_population.fitness_share()
-        species = current_population.make_species()
-        print(len(current_population.species_list))
+
+        # if problem != 4 and problem != 2:
+        #     # current_population.fitness_share()
+        #     species = current_population.make_species()
+        #     number_of_species = len(current_population.species_list)
+        #     generation_species.append(number_of_species)
+        #     print(f"Current number of species: {number_of_species} ")
+
         current_population.sort_by_fitness()
-        current_population.print_best()
-        avg_fitness, std = current_population.calc_avg_std()
+        best_inv = current_population.print_best()
+
+        if problem != 4:
+            avg_fitness, std = current_population.calc_avg_std()
+        else:
+            avg_fitness, std, true_counter, false_counter, avg_learned = current_population.calc_avg_std()
+            generation_true_count.append(true_counter)
+            generation_false_count.append(false_counter)
+            generation_learned.append(avg_learned)
+
         generation_avg_fitness.append(avg_fitness)
         generation_std.append(std)
 
-        #####################################################################
-        # Checking if were converging to local optima
-        if i > local_optima_range:  # If were after 10 generation we will start checking
-            std_signal = False
-            similarity_signal = False
+        if problem != 4 and problem != 2:
+            ####################################################################
+            # Checking if were converging to local optima
+            if i > local_optima_range:  # If were after 10 generation we will start checking
+                std_signal = 0
+                similarity_signal = 0
 
-            # Checking std sign for local optima
-            if np.mean(generation_std[-local_optima_range:-1]) <= std_threshold:
-                std_signal = True
+                # Checking std sign for local optima
+                if generation_std[-1] < std_threshold and generation_std[-1] < generation_std[-2] < generation_std[-3]:
+                    std_signal = 1
 
-            # Checking similarity sign for local optima
-            distance = current_population.calc_similarity()
-            generation_similarity.append(distance)
-            if distance <= similarity_threshold:
-                similarity_signal = True
+                # Checking similarity sign for local optima
+                distance = current_population.calc_similarity()
+                generation_similarity.append(distance)
+                if distance <= similarity_threshold:
+                    similarity_signal = 1
 
-            print(std_signal, similarity_signal)
+                if similarity_signal == 1 or std_signal == 1:
+                    print("Were on local Optima")
+                    local_optima_matrix.append(1)
 
-            if similarity_signal or std_signal < std_threshold:
-                print("Were on local Optima")
-                local_optima_matrix.append(True)
-                size = len(current_population.genomes[0].gene)
-                current_population.hyper_mutation(0.7, round(size/10))
-            else:
-                local_optima_matrix.append(False)
-            if i > local_optima_range + 1:
+                    if i > local_optima_range + 1:
+                        if local_optima_matrix[i - 1 - local_optima_range] == 1:
+                            current_population.hyper_mutation(0.5, 3)
+                            if local_optima_matrix[i - 1 - local_optima_range] == 1 and local_optima_matrix[
+                                i - 2 - local_optima_range] == 1:
+                                new_rate = max(5, current_population.genomes[0].gene.N/20)
+                                print("Strong mutation")
+                                current_population.hyper_mutation(0.7, new_rate)
 
-                if local_optima_matrix[i-1-local_optima_range] is True:
+                else:
+                    local_optima_matrix.append(0)
                     current_population.hyper_mutation(0.25, 1)
-                    if local_optima_matrix[i-1-local_optima_range] is True and local_optima_matrix[i-2-local_optima_range] is True:
-                        current_population.hyper_mutation(0.5, 3)
 
-        ######################################################################
+            #####################################################################
         if problem == 1:
-            if OP == current_population.get_best_fitness():
+            if OP == best_inv.gene.sack:
                 print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
                 break
 
-        elif problem == 3:
-            print("Number of empty bins", current_population.genomes[0].gene.get_empty_bins(), "\n")
-
-        if current_population.get_best_fitness() is 0:
+        if best_inv.fitness is 0:
             print("Fitness", current_population.get_best_fitness())
             print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
             break
@@ -161,13 +182,19 @@ def run_genetic_algo(problem, N):
     if problem == 0:
         print_nqueens_board(current_population.genomes[0].gene, N)
 
-    elif problem == 3:
-        bins_weight = [0] * N
-        for i, _bin in enumerate(current_population.genomes[0].gene.bins):
-            bins_weight[_bin] += WEIGHTS[i]
+    # elif problem == 3:
+    #     plt.plot(list(range(max_iter)), generation_species, color='blue', label='Number of species')
+    #     plt.show()
 
-        for i, weight in enumerate(bins_weight):
-            print(f"The weight of bin {i} is: {weight}")
+    if problem == 4:
+        xs = list(range(max_iter))
+        plt.figure(1)
+        plt.plot(xs, generation_true_count, color='blue', label='True positions')
+        plt.figure(2)
+        plt.plot(xs, generation_false_count, color='green', label='False positions')
+        plt.figure(3)
+        plt.plot(xs, generation_learned, color='black', label='False positions')
+        plt.show()
 
 
 def print_nqueens_board(final_board, N):
@@ -183,19 +210,28 @@ def print_nqueens_board(final_board, N):
 
 
 def main():
+    GP = GeneticProgramming.GP_tree()
+    GP.generate_tree()
+    return
     inp = None
+    question = None
     problem = int(input("Insert 0 for N Queens, 1 for Knap sack, 2 for String problem, 3 for Bin packing problem,"
                         " 4 for Baldwing effect simulation, 5 for NSGA-2: "))
     if problem == 0:
         inp = int(input("Choose N: "))
     elif problem == 1:
         inp = int(input("Choose Problem number from dataset (0-7): "))
+    elif problem == 3:
+        question = int(input("Choose Problem number from dataset (1-4): "))
+        while question >= 5 or question <= 0:
+            print("Problem number is not valid please choose again: ")
+            question = int(input("Choose Problem number from dataset (1-4): "))
 
     if problem == 5:
         NSGA_2.NSGA_2_Solver()
 
     else:
-        run_genetic_algo(problem=problem, N=inp)
+        run_genetic_algo(problem=problem, N=inp, question=question)
 
     # run_minimal_conflicts(N=N)
 

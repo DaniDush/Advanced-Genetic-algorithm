@@ -12,7 +12,6 @@ class bool_pgia:
 
         self.N = tsize
         self.size = tsize
-
         self.target = [char for char in target]
 
     def calc_distance(self, other):
@@ -24,27 +23,28 @@ class bool_pgia:
         dist_matrix[0, :] = np.arange(self.size + 1)
 
         # Calculate distances
-        for x in range(1, self.size):
-            for y in range(1, self.size):
-                # if there is a match
+        for x in range(1, self.size + 1):
+            for y in range(1, self.size + 1):
                 if self.string[x - 1] == other.string[y - 1]:
-                    dist_matrix[x, y] = min(
-                        dist_matrix[x - 1, y] + 1,
-                        dist_matrix[x - 1, y - 1],
-                        dist_matrix[x, y - 1] + 1
-                    )
+                    dist_matrix[x][y] = dist_matrix[x - 1][y - 1]
                 else:
-                    dist_matrix[x, y] = min(
-                        dist_matrix[x - 1, y] + 1,
-                        dist_matrix[x - 1, y - 1] + 1,
-                        dist_matrix[x, y - 1] + 1
-                    )
+                    a = dist_matrix[x][y - 1]
+                    b = dist_matrix[x - 1][y]
+                    c = dist_matrix[x - 1][y - 1]
+
+                    if a <= b and a <= c:
+                        dist_matrix[x][y] = a + 1
+                    elif b <= a and b <= c:
+                        dist_matrix[x][y] = b + 1
+                    else:
+                        dist_matrix[x][y] = c + 1
 
         return dist_matrix[self.size, self.size]
 
     def set_obj(self, obj):
         self.string = obj
         self.size = len(obj)
+        self.N = self.size
 
     def get_fitness(self, method=0):
         if method == 0:
@@ -79,8 +79,10 @@ class bool_pgia:
             char_to_check = self.string[j]
             if char_to_check == self.target[j]:
                 continue
+            if char_to_check in self.target:
+                fitness += 20
             else:
-                fitness += 10
+                fitness += 30
         return fitness
 
     def __getitem__(self, item):

@@ -11,7 +11,7 @@ class bin_packing:
         if not is_buffer:
             bins = list(range(0, N))
             shuffle(bins)
-            self.bins = bins
+            self.bins = bins.copy()
 
         self.N = N
         self.sum_of_bins = []
@@ -25,6 +25,13 @@ class bin_packing:
                 sum_of_bin += item.weight
 
         return sum_of_bin, items
+
+    def create_sum_of_bins(self):
+        self.sum_of_bins = [0] * self.N
+        for i, item in enumerate(self.bins):
+            self.sum_of_bins[item] += bin_packing.W[i]
+
+        return self.sum_of_bins
 
     def set_obj(self, obj):
         self.bins = obj
