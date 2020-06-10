@@ -1,5 +1,4 @@
 from pathlib import Path
-import numpy as np
 from time import time, sleep
 import Genetic
 from Const import probs
@@ -91,6 +90,11 @@ def run_genetic_algo(problem, N, question):
     elif problem == 4:
         max_iter = 50
         cross_method = 2
+        selection_method = 2
+
+    # If its GP problem
+    elif problem == 6:
+        cross_method = 6
         selection_method = 2
 
     ######################################################################
@@ -210,13 +214,10 @@ def print_nqueens_board(final_board, N):
 
 
 def main():
-    GP = GeneticProgramming.GP_tree()
-    GP.generate_tree()
-    return
     inp = None
     question = None
     problem = int(input("Insert 0 for N Queens, 1 for Knap sack, 2 for String problem, 3 for Bin packing problem,"
-                        " 4 for Baldwing effect simulation, 5 for NSGA-2: "))
+                        " 4 for Baldwing effect simulation, 5 for NSGA-2, 6 for solving using GP: "))
     if problem == 0:
         inp = int(input("Choose N: "))
     elif problem == 1:

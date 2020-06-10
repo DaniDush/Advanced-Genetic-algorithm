@@ -7,6 +7,7 @@ from KnapSack import knap_sack
 from BoolPegia import bool_pgia
 from BinPacking import bin_packing
 import Baldwin
+from GeneticProgramming import GP_tree
 
 GA_POPSIZE = 1000
 GA_ELITRATE = 0.15
@@ -14,7 +15,6 @@ GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
 WEIGHT_BOUND = 100
-
 
 
 class Genome:
@@ -156,6 +156,20 @@ class Population:
                 self.genomes.append(Genome(Baldwin.BaldwinEffectProblem(rand_solution=rand_solution), fitness=1))
                 self.buffer.append(Genome(gene=Baldwin.BaldwinEffectProblem(), fitness=1))
 
+        #   Solving for genetic programming
+        elif self.problem == 6:
+            grow_half = int(GA_POPSIZE / 2)
+            # Ramp half and half
+            for i in range(grow_half):
+                grow_tree = GP_tree()
+                full_tree = GP_tree()
+                grow_tree.generate_tree(GROW=True)
+                full_tree.generate_tree(GROW=False)
+                self.genomes.append(Genome(gene=grow_tree))
+                self.genomes.append(Genome(gene=full_tree))
+                self.buffer.append(Genome(gene=[]))
+                self.buffer.append(Genome(gene=[]))
+
     def calc_fitness(self):
         for i in range(GA_POPSIZE):
             temp_fitness = self.genomes[i].calc_individual_fitness()
@@ -203,6 +217,9 @@ class Population:
 
         elif cross_method == 5:
             self.CX_crossover(esize=esize)
+
+        elif cross_method == 6:
+            self.tress_crossover(esize=esize)
 
     def get_best_fitness(self):
         i = 0
@@ -434,6 +451,28 @@ class Population:
                 Genome.scramble_mutation(self.buffer[j], self.num_of_mutations)
             if random.random() < self.mutation_rate:
                 Genome.scramble_mutation(self.buffer[j + 1], self.num_of_mutations)
+
+    def tress_crossover(self, esize):
+
+        for i in range(esize, GA_POPSIZE):
+            # picking 2 genomes
+            i1 = randint(0, int(GA_POPSIZE / 2) - 2)
+            i2 = randint(i1, int(GA_POPSIZE / 2) - 1)
+
+            # Recombination vs mutation
+            if random.random() > 0.05:
+                self.genomes[i1].gene.reservoir_sampling()
+                self.genomes[i2].gene.reservoir_sampling()
+
+                child = deepcopy(self.genomes[i1].gene)
+                child.reservoir = self.genomes[i2].gene.reservoir
+                GP_tree.display_tree(self.genomes[i1].gene)
+                print("")
+                GP_tree.display_tree(child)
+                self.buffer[i].gene = child
+
+            # else:
+
 
     def SUS(self, num_of_parents):
         """ Parent selection method - Stochastic Universal Sampling (SUS)"""
