@@ -90,21 +90,21 @@ class GP_tree:
     def get_fitness(self):
         """ Function for calculating the fitness of the program """
         fitness = 0
-        operators = 0
         num_of_inputs = len(INPUTS)
         for i in range(num_of_inputs):
             return_value = run_gp_program(self.root, A=INPUTS[i][0], B=INPUTS[i][1])
 
             if return_value == TABLE[i]:
-                fitness += 1
+                fitness += 2
 
-        size = GP_tree.get_properties(self.root)
-
-        # Adding penalty for long trees
-        fitness -= (0.32 * operators)
+        operators_size = GP_tree.get_properties(self.root)
 
         # Anti-Bloating
-        if size > 10:
+
+        # Adding penalty for long trees
+        fitness -= (0.1 * operators_size)
+
+        if operators_size > 8 or fitness < 0:
             fitness = 0
 
         # Initialize num of operators for the next tree
@@ -145,7 +145,7 @@ class GP_tree:
         :param branch: the new branch from the second parent
         :return:
         """
-        branch_size = GP_tree.get_properties(branch)
+
         self.reservoir.value = branch.value
         self.reservoir.left = deepcopy(branch.left)
         self.reservoir.right = deepcopy(branch.right)
@@ -156,6 +156,10 @@ class GP_tree:
 
     @staticmethod
     def get_properties(root):
+        """ function to get some properties of the tree such as height, number of operators, number of operands etc...)
+        :param root:
+        :return: return value by choice
+        """
         size = 0
         leaf_count = 0
         min_leaf_depth = 0
@@ -194,7 +198,7 @@ class GP_tree:
 
             current_level = next_level
 
-        return size
+        return size - leaf_count
 
     def __str__(self):
         lines = _build_tree_string(self.root, curr_index=0)[0]

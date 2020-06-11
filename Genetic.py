@@ -34,7 +34,7 @@ class Genome:
         """ calculation of our gene score with chosen heuristic and aging score """
         temp_fitness = self.gene.get_fitness()
         # Adding extra aging score
-        #temp_fitness += self.aging()
+        temp_fitness += self.aging()
         return temp_fitness
 
     def mutate(self, num_of_mutations):
