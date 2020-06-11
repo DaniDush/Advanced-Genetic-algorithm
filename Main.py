@@ -131,7 +131,7 @@ def run_genetic_algo(problem, N, question):
         generation_avg_fitness.append(avg_fitness)
         generation_std.append(std)
 
-        if problem != 4 and problem != 2:
+        if problem != 6 and problem != 4 and problem != 2:
             ####################################################################
             # Checking if were converging to local optima
             if i > local_optima_range:  # If were after 10 generation we will start checking

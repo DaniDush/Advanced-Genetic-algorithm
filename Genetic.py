@@ -10,7 +10,7 @@ import Baldwin
 from GeneticProgramming import GP_tree
 
 GA_POPSIZE = 1000
-GA_ELITRATE = 0.15
+GA_ELITRATE = 0.1
 GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
@@ -34,7 +34,7 @@ class Genome:
         """ calculation of our gene score with chosen heuristic and aging score """
         temp_fitness = self.gene.get_fitness()
         # Adding extra aging score
-        # temp_fitness += self.aging()
+        #temp_fitness += self.aging()
         return temp_fitness
 
     def mutate(self, num_of_mutations):
@@ -84,6 +84,9 @@ class Genome:
             self.gene.solution[ipos_1] = '0'
         elif self.gene.solution[ipos_1] == '0':
             self.gene.solution[ipos_1] = '1'
+
+    def branch_mutation(self):
+        self.gene.branch_generator()
 
     def aging(self):
         """ Adding age cost calculated by MSE from the optimal age. """
@@ -158,13 +161,14 @@ class Population:
 
         #   Solving for genetic programming
         elif self.problem == 6:
-            grow_half = int(GA_POPSIZE / 2)
+            GA_POPSIZE = 8000
+            half_pop = int(GA_POPSIZE / 2)
             # Ramp half and half
-            for i in range(grow_half):
+            for i in range(half_pop):
                 grow_tree = GP_tree()
                 full_tree = GP_tree()
-                grow_tree.generate_tree(GROW=True)
-                full_tree.generate_tree(GROW=False)
+                GP_tree.generate_tree(current_node=grow_tree.root, GROW=True, current_depth=0)
+                GP_tree.generate_tree(current_node=full_tree.root, GROW=False, current_depth=0)
                 self.genomes.append(Genome(gene=grow_tree))
                 self.genomes.append(Genome(gene=full_tree))
                 self.buffer.append(Genome(gene=[]))
@@ -177,7 +181,7 @@ class Population:
 
     def sort_by_fitness(self):
         # If its maximize problem
-        if self.problem == 1 or self.problem == 3 or self.problem == 4:
+        if self.problem == 1 or self.problem == 3 or self.problem == 4 or self.problem == 6:
             self.genomes.sort(reverse=True)  # Sort population using its fitness
         else:
             self.genomes.sort()  # Sort population using its fitness
@@ -188,10 +192,14 @@ class Population:
             self.buffer[i].age += 1  # Kept for another generation
 
     def mate(self, cross_method=1, selection_method=0):
+        global GA_ELITRATE
         esize = int(GA_POPSIZE * GA_ELITRATE)
 
-        # Taking the best citizens
-        self.elitism(esize)
+        if self.problem != 6:
+            # Taking the best citizens
+            self.elitism(esize)
+        else:
+            esize = 0
 
         # If we choose parent selection then we will choose parents as the number of psize-esize
         if selection_method == 1:
@@ -219,7 +227,7 @@ class Population:
             self.CX_crossover(esize=esize)
 
         elif cross_method == 6:
-            self.tress_crossover(esize=esize)
+            self.trees_crossover(esize=esize)
 
     def get_best_fitness(self):
         i = 0
@@ -452,27 +460,32 @@ class Population:
             if random.random() < self.mutation_rate:
                 Genome.scramble_mutation(self.buffer[j + 1], self.num_of_mutations)
 
-    def tress_crossover(self, esize):
-
+    def trees_crossover(self, esize):
         for i in range(esize, GA_POPSIZE):
             # picking 2 genomes
             i1 = randint(0, int(GA_POPSIZE / 2) - 2)
-            i2 = randint(i1, int(GA_POPSIZE / 2) - 1)
+            i2 = randint(i1 + 1, int(GA_POPSIZE / 2) - 1)
 
             # Recombination vs mutation
             if random.random() > 0.05:
-                self.genomes[i1].gene.reservoir_sampling()
-                self.genomes[i2].gene.reservoir_sampling()
-
+                self.genomes[i1].gene.reservoir_sampling(pr=0.9)
+                self.genomes[i2].gene.reservoir_sampling(pr=0.9)
                 child = deepcopy(self.genomes[i1].gene)
-                child.reservoir = self.genomes[i2].gene.reservoir
-                GP_tree.display_tree(self.genomes[i1].gene)
-                print("")
-                GP_tree.display_tree(child)
-                self.buffer[i].gene = child
+                child.branch_swap(self.genomes[i2].gene.reservoir)
 
-            # else:
-
+                child_fitness = child.get_fitness()
+                if child_fitness < self.genomes[i1].fitness:
+                    self.buffer[i].gene = child
+                else:
+                    if random.random() > 0.5:
+                        self.buffer[i].gene = child
+                    else:
+                        self.buffer[i] = self.genomes[i1]
+            else:
+                child = deepcopy(self.genomes[i1])
+                child.gene.reservoir_sampling(pr=0.5)
+                child.branch_mutation()
+                self.buffer[i] = child
 
     def SUS(self, num_of_parents):
         """ Parent selection method - Stochastic Universal Sampling (SUS)"""
@@ -500,6 +513,17 @@ class Population:
 
         return selected
 
+    def over_selection(self, esize):
+        pop_size = GA_POPSIZE-esize+1
+        """ Implementation of over selection method """
+        x = int((pop_size*4)/100)     # Taking 4% of the population
+        first_range = int((pop_size*80)/100)
+        choose_from = self.genomes[0:x]
+        new_population = random.choices(choose_from, k=first_range)
+        choose_from = self.genomes[x+1:]
+        new_population.extend(random.choices(choose_from, k=pop_size-first_range))
+        self.genomes[esize:] = new_population
+
     def tournament_selection(self, num_of_parents, esize):
         """ choosing k individuals for a tournament, winner pass for crossover """
         selected = []
@@ -508,7 +532,7 @@ class Population:
 
         maximize = False
 
-        if self.problem == 4 or self.problem == 3 or self.problem == 1:
+        if self.problem == 6 or self.problem == 4 or self.problem == 3 or self.problem == 1:
             maximize = True
 
         while len(selected) < num_of_parents:
