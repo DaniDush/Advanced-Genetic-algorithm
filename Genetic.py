@@ -466,8 +466,11 @@ class Population:
             i1 = randint(0, int(GA_POPSIZE / 2) - 2)
             i2 = randint(i1 + 1, int(GA_POPSIZE / 2) - 1)
 
-            # Recombination vs mutation
-            if random.random() > 0.05:
+            # The next step will be decided due to some probability
+            random_decision = random.random()
+
+            # Crossover
+            if 0.9 > random_decision > 0.05:
                 self.genomes[i1].gene.reservoir_sampling(pr=0.9)
                 self.genomes[i2].gene.reservoir_sampling(pr=0.9)
                 child = deepcopy(self.genomes[i1].gene)
@@ -481,11 +484,17 @@ class Population:
                         self.buffer[i].gene = child
                     else:
                         self.buffer[i] = self.genomes[i1]
-            else:
+
+            # Mutation
+            elif random_decision <= 0.05:
                 child = deepcopy(self.genomes[i1])
                 child.gene.reservoir_sampling(pr=0.5)
                 child.branch_mutation()
                 self.buffer[i] = child
+
+            # Recombination
+            else:
+                self.buffer[i] = deepcopy(self.genomes[i1])
 
     def SUS(self, num_of_parents):
         """ Parent selection method - Stochastic Universal Sampling (SUS)"""

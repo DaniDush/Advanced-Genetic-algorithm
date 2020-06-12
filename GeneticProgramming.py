@@ -4,12 +4,11 @@ import numpy as np
 
 MAX_PARSE_TREE_DEPTH = 3
 OPERATORS = ['AND', 'OR', 'NOT']
-NEGATIVE_OPERATORS = ['NAND', 'NOR']
 OPERANDS = ['A', 'B']
-NEGATIVE_OPERANDS = ['NotA', 'NotB']
 OPTIONS = [OPERATORS, OPERANDS]
-INPUTS = [[True, False], [False, True], [False, False], [True, True]]  # Inputs for A and B
-TABLE = [True, True, False, False]  # XOR function values from the table
+XOR_TABLE = [True, True, False, False]  # XOR function values from the table
+A_INPUTS = np.array([True, False, False, True])
+B_INPUTS = np.array([False, True, False, True])
 
 
 class Node:
@@ -26,7 +25,7 @@ class Node:
 class GP_tree:
     operators_counter = 0
 
-    def __init__(self, node=None, father=None):
+    def __init__(self):
         self.root = Node()
         self.reservoir = None
 
@@ -90,11 +89,12 @@ class GP_tree:
     def get_fitness(self):
         """ Function for calculating the fitness of the program """
         fitness = 0
-        num_of_inputs = len(INPUTS)
-        for i in range(num_of_inputs):
-            return_value = run_gp_program(self.root, A=INPUTS[i][0], B=INPUTS[i][1])
 
-            if return_value == TABLE[i]:
+        # Running the program
+        return_value = run_gp_program(self.root)
+
+        for idx, value in enumerate(return_value):
+            if value == XOR_TABLE[idx]:
                 fitness += 2
 
         operators_size = GP_tree.get_properties(self.root)
@@ -113,12 +113,14 @@ class GP_tree:
         return fitness
 
     def reservoir_sampling(self, pr=0.9):
+        """ function to run reservoir sampling from the root """
+
+        # For Cross-over pr=0.9, for mutation pr=0.5
         if random() < pr:
             node_type = OPERANDS
         else:
             node_type = OPERANDS
 
-        """ function to run reservoir sampling from the root """
         index = 0
         self.reservoir = None
         while self.reservoir is None:
@@ -206,24 +208,24 @@ class GP_tree:
         return ""
 
 
-def run_gp_program(node, A=True, B=False):
+def run_gp_program(node):
     """ Running the program with given A and B inputs """
     # Stop condition
     if node.value == 'A':
-        return A
+        return A_INPUTS
     elif node.value == 'B':
-        return B
+        return B_INPUTS
 
     ##########################################
     # If its an operator
     if node.value == 'AND':
-        return run_gp_program(node.left, A=A, B=B) and run_gp_program(node.right, A=A, B=B)
+        return np.logical_and(run_gp_program(node.left), run_gp_program(node.right))
 
     elif node.value == 'OR':
-        return run_gp_program(node.left, A=A, B=B) or run_gp_program(node.right, A=A, B=B)
+        return np.logical_or(run_gp_program(node.left), run_gp_program(node.right))
 
     elif node.value == 'NOT':
-        return not (run_gp_program(node.left, A=A, B=B))
+        return np.logical_not(run_gp_program(node.left))
 
     # Should not get here
     return None
