@@ -9,6 +9,10 @@ OPTIONS = [OPERATORS, OPERANDS]
 XOR_TABLE = [True, True, False, False]  # XOR function values from the table
 A_INPUTS = np.array([True, False, False, True])
 B_INPUTS = np.array([False, True, False, True])
+MAX_OPERATORS = 8
+
+MATH_OPERATORS = ['+', '-', '*', '/']
+X_RANGE = [-1, 1]
 
 
 class Node:
@@ -23,7 +27,6 @@ class Node:
 
 
 class GP_tree:
-    operators_counter = 0
 
     def __init__(self):
         self.root = Node()
@@ -104,11 +107,8 @@ class GP_tree:
         # Adding penalty for long trees
         fitness -= (0.1 * operators_size)
 
-        if operators_size > 8 or fitness < 0:
+        if operators_size > MAX_OPERATORS or fitness < 0:
             fitness = 0
-
-        # Initialize num of operators for the next tree
-        GP_tree.operators_counter = 0
 
         return fitness
 
@@ -142,15 +142,22 @@ class GP_tree:
         if current_node.right is not None:
             self.sampling(current_node.right, index, node_type)
 
-    def branch_swap(self, branch):
+    def branch_swap(self, branch, copy=True):
         """
-        :param branch: the new branch from the second parent
+        :param copy: True = making new copy of the branch
+        :param branch: the new branch from the other parent
         :return:
         """
 
         self.reservoir.value = branch.value
-        self.reservoir.left = deepcopy(branch.left)
-        self.reservoir.right = deepcopy(branch.right)
+
+        if copy:
+            self.reservoir.left = deepcopy(branch.left)
+            self.reservoir.right = deepcopy(branch.right)
+
+        else:
+            self.reservoir.left = branch.left
+            self.reservoir.right = branch.right
 
     # TODO make the choice random !
     def branch_generator(self):
@@ -231,14 +238,8 @@ def run_gp_program(node):
     return None
 
 
-def _build_tree_string(root, curr_index, index=True, delimiter='-'):
-    """Recursively walk down the binary tree and build a pretty-print string.
-    In each recursive call, a "box" of characters visually representing the
-    current (sub)tree is constructed line by line. Each line is padded with
-    whitespaces to ensure all lines in the box have the same length. Then the
-    box, its width, and start-end positions of its root node value repr string
-    (required for drawing branches) are sent up to the parent call. The parent
-    call then combines its left and right sub-boxes to build a larger box etc.
+def _build_tree_string(root, curr_index, index=False, delimiter='-'):
+    """ Printing the tree - taken from binarytree package
     :param root: Root node of the binary tree.
     :type root: binarytree.Node
     :param curr_index: Level-order_ index of the current node (root node is 0).
@@ -253,8 +254,6 @@ def _build_tree_string(root, curr_index, index=True, delimiter='-'):
         of the box, and start-end positions of the repr string of the new root
         node value.
     :rtype: ([str], int, int, int)
-    .. _Level-order:
-        https://en.wikipedia.org/wiki/Tree_traversal#Breadth-first_search
     """
     if root is None:
         return [], 0, 0, 0

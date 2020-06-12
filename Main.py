@@ -94,6 +94,7 @@ def run_genetic_algo(problem, N, question):
 
     # If its GP problem
     elif problem == 6:
+        max_iter = 20
         cross_method = 6
         selection_method = 2
 
@@ -110,12 +111,12 @@ def run_genetic_algo(problem, N, question):
         generation_start_time = time()
         current_population.calc_fitness()
 
-        # if problem != 4 and problem != 2:
-        #     # current_population.fitness_share()
-        #     species = current_population.make_species()
-        #     number_of_species = len(current_population.species_list)
-        #     generation_species.append(number_of_species)
-        #     print(f"Current number of species: {number_of_species} ")
+        if problem != 6 and problem != 4 and problem != 2:
+            # current_population.fitness_share()
+            species = current_population.make_species()
+            number_of_species = len(current_population.species_list)
+            generation_species.append(number_of_species)
+            print(f"Current number of species: {number_of_species} ")
 
         current_population.sort_by_fitness()
         best_inv = current_population.print_best()
@@ -199,6 +200,14 @@ def run_genetic_algo(problem, N, question):
         plt.figure(3)
         plt.plot(xs, generation_learned, color='black', label='False positions')
         plt.show()
+
+    # if problem == 6:
+    #     xs = list(range(max_iter))
+    #     plt.figure(1)
+    #     plt.plot(xs, num_of_operators, color='blue', label='Change in the number of operators for best citizen')
+    #     plt.xlabel("Number of generation")
+    #     plt.ylabel("Number of operators")
+    #     plt.show()
 
 
 def print_nqueens_board(final_board, N):

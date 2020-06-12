@@ -161,7 +161,7 @@ class Population:
 
         #   Solving for genetic programming
         elif self.problem == 6:
-            GA_POPSIZE = 8000
+            GA_POPSIZE = 3000
             half_pop = int(GA_POPSIZE / 2)
             # Ramp half and half
             for i in range(half_pop):
@@ -193,13 +193,12 @@ class Population:
 
     def mate(self, cross_method=1, selection_method=0):
         global GA_ELITRATE
-        esize = int(GA_POPSIZE * GA_ELITRATE)
 
-        if self.problem != 6:
-            # Taking the best citizens
-            self.elitism(esize)
-        else:
-            esize = 0
+        if self.problem == 6:
+            GA_ELITRATE = 0.05
+
+        esize = int(GA_POPSIZE * GA_ELITRATE)
+        self.elitism(esize)
 
         # If we choose parent selection then we will choose parents as the number of psize-esize
         if selection_method == 1:
@@ -461,7 +460,10 @@ class Population:
                 Genome.scramble_mutation(self.buffer[j + 1], self.num_of_mutations)
 
     def trees_crossover(self, esize):
-        for i in range(esize, GA_POPSIZE):
+        new_pop = GA_POPSIZE - esize
+
+        i = 0
+        while i != new_pop:
             # picking 2 genomes
             i1 = randint(0, int(GA_POPSIZE / 2) - 2)
             i2 = randint(i1 + 1, int(GA_POPSIZE / 2) - 1)
@@ -473,28 +475,35 @@ class Population:
             if 0.9 > random_decision > 0.05:
                 self.genomes[i1].gene.reservoir_sampling(pr=0.9)
                 self.genomes[i2].gene.reservoir_sampling(pr=0.9)
-                child = deepcopy(self.genomes[i1].gene)
-                child.branch_swap(self.genomes[i2].gene.reservoir)
 
-                child_fitness = child.get_fitness()
-                if child_fitness < self.genomes[i1].fitness:
-                    self.buffer[i].gene = child
+                # Branches swap
+                temp_branch = deepcopy(self.genomes[i1].gene.reservoir)
+                child_1 = deepcopy(self.genomes[i1].gene)
+                child_1.branch_swap(self.genomes[i2].gene.reservoir)
+                child_2 = deepcopy(self.genomes[i2].gene)
+                child_2.branch_swap(temp_branch, copy=False)
+
+                self.buffer[i+esize].gene = child_1
+
+                if i + 1 == new_pop:
+                    i += 1
+
                 else:
-                    if random.random() > 0.5:
-                        self.buffer[i].gene = child
-                    else:
-                        self.buffer[i] = self.genomes[i1]
+                    self.buffer[i+1+esize].gene = child_2
+                    i += 2
 
             # Mutation
             elif random_decision <= 0.05:
                 child = deepcopy(self.genomes[i1])
                 child.gene.reservoir_sampling(pr=0.5)
                 child.branch_mutation()
-                self.buffer[i] = child
+                self.buffer[i+esize] = child
+                i += 1
 
             # Recombination
             else:
-                self.buffer[i] = deepcopy(self.genomes[i1])
+                self.buffer[i+esize] = self.genomes[i1]
+                i += 1
 
     def SUS(self, num_of_parents):
         """ Parent selection method - Stochastic Universal Sampling (SUS)"""
