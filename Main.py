@@ -26,7 +26,7 @@ def get_args(question):
     C = int(problem_args[1])
     WEIGHTS = problem_args[2:]
 
-    return N, C, WEIGHTS, species_thres[question-1]
+    return N, C, WEIGHTS, species_thres[question - 1]
 
 
 # TODO what we do if spos_1 == spos_2
@@ -49,7 +49,7 @@ def run_genetic_algo(problem, N, question):
     similarity_threshold = 1
     std_threshold = 0.2
     local_optima_range = 5
-    local_optima_matrix = [0]*local_optima_range
+    local_optima_matrix = [0] * local_optima_range
     generation_std = []
     generation_avg_fitness = []
     generation_similarity = []
@@ -92,9 +92,21 @@ def run_genetic_algo(problem, N, question):
         cross_method = 2
         selection_method = 2
 
-    # If its GP problem
+    # GP - XOR
     elif problem == 6:
+        GeneticProgramming.OPERATORS = GeneticProgramming.XOR_OPERATORS
+        GeneticProgramming.OPERANDS = GeneticProgramming.XOR_OPERANDS
         max_iter = 20
+        cross_method = 6
+        selection_method = 2
+
+    # GP - MATH
+    elif problem == 7:
+        GeneticProgramming.OPERATORS = GeneticProgramming.MATH_OPERATORS
+        GeneticProgramming.OPERANDS = GeneticProgramming.MATH_OPERANDS
+        GeneticProgramming.init_math_args()
+        GeneticProgramming.PROBLEM = 'M'
+        max_iter = 30000
         cross_method = 6
         selection_method = 2
 
@@ -111,7 +123,7 @@ def run_genetic_algo(problem, N, question):
         generation_start_time = time()
         current_population.calc_fitness()
 
-        if problem != 6 and problem != 4 and problem != 2:
+        if problem == 1 or problem == 3:
             # current_population.fitness_share()
             species = current_population.make_species()
             number_of_species = len(current_population.species_list)
@@ -132,7 +144,7 @@ def run_genetic_algo(problem, N, question):
         generation_avg_fitness.append(avg_fitness)
         generation_std.append(std)
 
-        if problem != 6 and problem != 4 and problem != 2:
+        if problem == 1 or problem == 3:
             ####################################################################
             # Checking if were converging to local optima
             if i > local_optima_range:  # If were after 10 generation we will start checking
@@ -158,7 +170,7 @@ def run_genetic_algo(problem, N, question):
                             current_population.hyper_mutation(0.5, 3)
                             if local_optima_matrix[i - 1 - local_optima_range] == 1 and local_optima_matrix[
                                 i - 2 - local_optima_range] == 1:
-                                new_rate = max(5, current_population.genomes[0].gene.N/20)
+                                new_rate = max(5, current_population.genomes[0].gene.N / 20)
                                 print("Strong mutation")
                                 current_population.hyper_mutation(0.7, new_rate)
 
@@ -170,6 +182,14 @@ def run_genetic_algo(problem, N, question):
         if problem == 1:
             if OP == best_inv.gene.sack:
                 print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
+                break
+
+        if problem == 7:
+            if GeneticProgramming.IS_TERMINATE:
+                print("Fitness", best_inv.fitness)
+                print("Number of hits (from 40): ", best_inv.gene.hits)
+
+                print(best_inv.gene)
                 break
 
         if best_inv.fitness is 0:
@@ -226,7 +246,8 @@ def main():
     inp = None
     question = None
     problem = int(input("Insert 0 for N Queens, 1 for Knap sack, 2 for String problem, 3 for Bin packing problem,"
-                        " 4 for Baldwing effect simulation, 5 for NSGA-2, 6 for solving using GP: "))
+                        "4 for Baldwing effect simulation, 5 for NSGA-2, 6 for XOR using GP, 7 for Univariate using "
+                        "GP:"))
     if problem == 0:
         inp = int(input("Choose N: "))
     elif problem == 1:

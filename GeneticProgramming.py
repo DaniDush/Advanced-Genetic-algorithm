@@ -2,17 +2,35 @@ from copy import deepcopy
 from random import randint, random
 import numpy as np
 
+PROBLEM = 'X'
+
 MAX_PARSE_TREE_DEPTH = 3
-OPERATORS = ['AND', 'OR', 'NOT']
-OPERANDS = ['A', 'B']
-OPTIONS = [OPERATORS, OPERANDS]
+MAX_OPERATORS = 8
+XOR_OPERATORS = ['AND', 'OR', 'NOT']
+XOR_OPERANDS = ['A', 'B']
 XOR_TABLE = [True, True, False, False]  # XOR function values from the table
 A_INPUTS = np.array([True, False, False, True])
 B_INPUTS = np.array([False, True, False, True])
-MAX_OPERATORS = 8
 
+######################### Testing #########################
+# Test sequence 1 - ((A OR B) AND NOT((NOT A) OR (NOT B)))
+TEST_TABLE_1 = [False, False, False, True]
+
+# Test sequence 2 - ((A AND B) OR NOT((NOT A) AND (NOT B)))
+TEST_TABLE_2 = [True, True, False, True]
+
+######################### Univariate #########################
 MATH_OPERATORS = ['+', '-', '*', '/']
+MATH_OPERANDS = ['X']
+X_INPUTS = []
+Y_TABLE = []
 X_RANGE = [-1, 1]
+N_HITS = 20
+MAX_EVAL = 50000
+FITNESS_EVAL = 0
+IS_TERMINATE = False
+OPERATORS = []
+OPERANDS = []
 
 
 class Node:
@@ -31,6 +49,7 @@ class GP_tree:
     def __init__(self):
         self.root = Node()
         self.reservoir = None
+        self.hits = None
 
     @staticmethod
     def generate_tree(current_node, GROW, current_depth):
@@ -67,38 +86,38 @@ class GP_tree:
                 current_node.right = Node()
                 GP_tree.generate_tree(current_node=current_node.right, GROW=GROW, current_depth=current_depth + 1)
 
-    @staticmethod
-    def operator_not_convergence(node):
-        """ function to converge the not operator with its child """
-        action = np.random.choice(OPTIONS)
-        rand_choice = np.random.choice(action)
-
-        while rand_choice == 'NOT':
-            action = np.random.choice(OPTIONS)
-            rand_choice = np.random.choice(action)
-
-        if rand_choice == 'A':
-            node = 'NotA'
-        elif rand_choice == 'B':
-            node = 'NotB'
-        elif rand_choice == 'AND':
-            node = 'NAND'
-        elif rand_choice == 'OR':
-            node = 'NOR'
-
-        return node
-
     # TODO make the fitness normalize (now its closer to 4)
     def get_fitness(self):
         """ Function for calculating the fitness of the program """
+        global IS_TERMINATE, FITNESS_EVAL
         fitness = 0
 
         # Running the program
-        return_value = run_gp_program(self.root)
+        return_values = run_gp_program(self.root)
 
-        for idx, value in enumerate(return_value):
-            if value == XOR_TABLE[idx]:
-                fitness += 2
+        # XOR
+        if PROBLEM == 'X':
+            for idx, value in enumerate(return_values):
+                if value == XOR_TABLE[idx]:
+                    fitness += 2
+
+        # MATH
+        else:
+            hits = 0
+            for idx, value in enumerate(return_values):
+                # print(value, Y_TABLE[idx])
+                fitness += (value-Y_TABLE[idx])**2
+
+                if Y_TABLE[idx] - 0.1 <= value <= Y_TABLE[idx] + 0.1:
+                    hits += 1
+
+            FITNESS_EVAL += 1
+            self.hits = hits
+            # Termination criteria
+            if hits == N_HITS or FITNESS_EVAL >= MAX_EVAL:
+                IS_TERMINATE = True
+
+            return fitness
 
         operators_size = GP_tree.get_properties(self.root)
 
@@ -222,6 +241,8 @@ def run_gp_program(node):
         return A_INPUTS
     elif node.value == 'B':
         return B_INPUTS
+    elif node.value == 'X':
+        return X_INPUTS
 
     ##########################################
     # If its an operator
@@ -234,8 +255,38 @@ def run_gp_program(node):
     elif node.value == 'NOT':
         return np.logical_not(run_gp_program(node.left))
 
+    elif node.value == '+':
+        return np.add(run_gp_program(node.left), run_gp_program(node.right))
+
+    elif node.value == '-':
+        return np.subtract(run_gp_program(node.left), run_gp_program(node.right))
+
+    elif node.value == '/':
+        value_array = np.true_divide(run_gp_program(node.left), run_gp_program(node.right))
+        value_array[~ np.isfinite(value_array)] = 1  # -inf inf NaN
+        return value_array
+
+    elif node.value == '*':
+        return np.multiply(run_gp_program(node.left), run_gp_program(node.right))
+
     # Should not get here
     return None
+
+
+def function(X):
+    # X^2+X+1
+    return (X ** 2) + X + 1
+
+
+def init_math_args(n=40):
+    """ Function to initialize problem parameters """
+    global N_HITS
+    N_HITS = n
+
+    for i in range(n):
+        value = X_RANGE[0] + (i / (n - 1)) * (X_RANGE[1] - X_RANGE[0])
+        X_INPUTS.append(value)
+        Y_TABLE.append(function(value))
 
 
 def _build_tree_string(root, curr_index, index=False, delimiter='-'):

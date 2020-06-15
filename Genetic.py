@@ -160,8 +160,11 @@ class Population:
                 self.buffer.append(Genome(gene=Baldwin.BaldwinEffectProblem(), fitness=1))
 
         #   Solving for genetic programming
-        elif self.problem == 6:
-            GA_POPSIZE = 3000
+        elif self.problem == 6 or self.problem == 7:
+            if self.problem == 7:
+                GA_POPSIZE = 1000
+            else:
+                GA_POPSIZE = 3000
             half_pop = int(GA_POPSIZE / 2)
             # Ramp half and half
             for i in range(half_pop):
