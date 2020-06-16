@@ -7,14 +7,32 @@ from BinPacking import bin_packing
 import NSGA_2
 import matplotlib.pyplot as plt
 import GeneticProgramming
+import threading
 
 GA_MAXITER = 150
 KS_MAXITER = 30
 species_thres = [4.3, 6.3, 8.91, 12.7]
+spec_thres_3 = 0.1
+GLOBAL_BEST = None
+threadLock = threading.Lock()
+
+
+class myThread(threading.Thread):
+    def __init__(self, threadID, name, N, question, problem):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self.N = N
+        self.question = question
+        self.problem = problem
+
+    def run(self):
+        run_genetic_algo(self.problem, self.N, self.question)
 
 
 def get_args(question):
     problem_args = []
+
     path = Path(f'{question}.txt')
     with open(path) as f:
         lines = f.readlines()
@@ -43,7 +61,11 @@ def run_minimal_conflicts(N):
 
 
 def run_genetic_algo(problem, N, question):
-    print("Genetic Algorithm solution: \n")
+    global GLOBAL_BEST
+    pop_size = 1000
+    current_thread = threading.currentThread().getName()
+
+    print(f"{current_thread} Activated \n")
     ######################################################################
     # Initialize local optima vars
     similarity_threshold = 1
@@ -67,55 +89,83 @@ def run_genetic_algo(problem, N, question):
 
     # If its N Queens problem
     if problem == 0:
-        selection_method = 2
-        cross_method = 4
+        if current_thread == 'Thread-2':
+            pop_size = 500
+            selection_method = 1
+            cross_method = 5
+
+        else:
+            selection_method = 2
+            cross_method = 4
+            pop_size = 1000
 
     # If its Knap Sack problem
     elif problem == 1:
         spec_threshold = 1
         max_iter = KS_MAXITER
-        selection_method = 0
-        cross_method = 2
         OP = probs[N][3]
+
+        if current_thread == 'Thread-2':
+            pop_size = 500
+            selection_method = 0
+            cross_method = 1
+
+        elif current_thread == 'Thread-3':
+            pop_size = 500
+            selection_method = 1
+            cross_method = 2
+
+        else:
+            selection_method = 2
+            cross_method = 2
+            pop_size = 1000
+
+    # If its String problem
+    elif problem == 2:
+        if current_thread == 'Thread-2':
+            pop_size = 500
+            selection_method = 0    # No selection
+        elif current_thread == 'Thread-3':
+            pop_size = 500
+            selection_method = 1    # SUS
+        else:
+            pop_size = 5000
+            selection_method = 2    # Tournament Selection
 
     # If its Bin packing problem
     elif problem == 3:
         std_threshold = 0.1
-        N, C, WEIGHTS, spec_threshold = get_args(question)
-        bin_packing.W = WEIGHTS
-        bin_packing.C = C
+        spec_threshold = spec_thres_3
         cross_method = 4
+        pop_size = 400
 
     # If its Baldwin effect
     elif problem == 4:
         max_iter = 50
         cross_method = 2
         selection_method = 2
+        pop_size = 400
 
     # GP - XOR
     elif problem == 6:
-        GeneticProgramming.OPERATORS = GeneticProgramming.XOR_OPERATORS
-        GeneticProgramming.OPERANDS = GeneticProgramming.XOR_OPERANDS
         max_iter = 20
         cross_method = 6
         selection_method = 2
+        pop_size = 3000
 
     # GP - MATH
     elif problem == 7:
-        GeneticProgramming.OPERATORS = GeneticProgramming.MATH_OPERATORS
-        GeneticProgramming.OPERANDS = GeneticProgramming.MATH_OPERANDS
-        GeneticProgramming.init_math_args()
-        GeneticProgramming.PROBLEM = 'M'
-        max_iter = 30000
+        max_iter = 30000    # Will terminate before max_iter
         cross_method = 6
         selection_method = 2
+        pop_size = 1000
 
     ######################################################################
     start_time = time()
     if problem == 3 or problem == 1:
-        current_population = Genetic.Population(problem=problem, speciation_threshold=spec_threshold)
+        current_population = Genetic.Population(problem=problem, pop_size=pop_size, speciation_threshold=spec_threshold)
     else:
-        current_population = Genetic.Population(problem=problem)
+        current_population = Genetic.Population(problem=problem, pop_size=pop_size)
 
     current_population.init_population(N=N)
 
@@ -132,6 +182,22 @@ def run_genetic_algo(problem, N, question):
 
         current_population.sort_by_fitness()
         best_inv = current_population.print_best()
+
+        ################ Synchronize Area ################
+        # Setting global best
+        threadLock.acquire()
+        if GLOBAL_BEST is None:
+            GLOBAL_BEST = best_inv
+        else:
+            # If its maximize problem
+            if problem == 1 or problem == 3 or problem == 4 or problem == 6:
+                if best_inv.fitness > GLOBAL_BEST.fitness:
+                    GLOBAL_BEST = best_inv
+            else:
+                if best_inv.fitness < GLOBAL_BEST.fitness:
+                    GLOBAL_BEST = best_inv
+        threadLock.release()
+        ################ Synchronize Area ################
 
         if problem != 4:
             avg_fitness, std = current_population.calc_avg_std()
@@ -180,32 +246,26 @@ def run_genetic_algo(problem, N, question):
 
             #####################################################################
         if problem == 1:
-            if OP == best_inv.gene.sack:
-                print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
+            if OP == GLOBAL_BEST.gene.sack:
+                print(f'{current_thread} terminated')
                 break
 
         if problem == 7:
             if GeneticProgramming.IS_TERMINATE:
-                print("Fitness", best_inv.fitness)
-                print("Number of hits (from 40): ", best_inv.gene.hits)
-
-                print(best_inv.gene)
+                print(f'{current_thread} terminated')
                 break
 
-        if best_inv.fitness is 0:
-            print("Fitness", current_population.get_best_fitness())
-            print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
+        if GLOBAL_BEST.fitness is 0 and (problem == 0 or problem == 2):
+            print(f'{current_thread} terminated')
             break
 
         current_population.mate(cross_method=cross_method, selection_method=selection_method)
         current_population.swap()
-        print(f'Generation running time for iteration {i}: ', time() - generation_start_time)
+
+        print(f'For thread {current_thread}:\nGeneration running time for iteration {i}: ',
+              time() - generation_start_time)
 
     print('Absolute running time: ', time() - start_time)
-
-    # print final board if its N Queens
-    if problem == 0:
-        print_nqueens_board(current_population.genomes[0].gene, N)
 
     # elif problem == 3:
     #     plt.plot(list(range(max_iter)), generation_species, color='blue', label='Number of species')
@@ -242,6 +302,57 @@ def print_nqueens_board(final_board, N):
     print("")
 
 
+def multi_threading_ga(problem, N, question):
+    # If its Bin packing problem
+    if problem == 3:
+        global spec_thres_3
+        N, C, WEIGHTS, spec_threshold = get_args(question)
+        bin_packing.W = WEIGHTS
+        bin_packing.C = C
+        spec_thres_3 = spec_threshold
+
+    # GP - XOR
+    elif problem == 6:
+        GeneticProgramming.OPERATORS = GeneticProgramming.XOR_OPERATORS
+        GeneticProgramming.OPERANDS = GeneticProgramming.XOR_OPERANDS
+
+    # GP - MATH
+    elif problem == 7:
+        GeneticProgramming.OPERATORS = GeneticProgramming.MATH_OPERATORS
+        GeneticProgramming.OPERANDS = GeneticProgramming.MATH_OPERANDS
+        GeneticProgramming.init_math_args()
+        GeneticProgramming.PROBLEM = 'M'
+
+    # Create new threads
+    thread1 = myThread(1, "Thread-1", N, question, problem)
+    thread2 = myThread(2, "Thread-2", N, question, problem)
+    thread3 = myThread(3, "Thread-3", N, question, problem)
+    thread4 = myThread(4, "Thread-4", N, question, problem)
+
+    # Start new Threads
+    thread1.start()
+    thread2.start()
+    thread3.start()
+    thread4.start()
+
+    # Waiting for threads to terminate
+    thread1.join()
+    thread2.join()
+    thread3.join()
+    thread4.join()
+
+    # print final board if its N Queens
+    if problem == 0:
+        print_nqueens_board(GLOBAL_BEST.gene, N)
+    else:
+        print(GLOBAL_BEST.gene)
+
+    if problem == 7:
+        print(f"Number of hits: {GLOBAL_BEST.gene.hits}")
+
+    print("Fitness", GLOBAL_BEST.fitness)
+
+
 def main():
     inp = None
     question = None
@@ -262,7 +373,7 @@ def main():
         NSGA_2.NSGA_2_Solver()
 
     else:
-        run_genetic_algo(problem=problem, N=inp, question=question)
+        multi_threading_ga(problem=problem, N=inp, question=question)
 
     # run_minimal_conflicts(N=N)
 

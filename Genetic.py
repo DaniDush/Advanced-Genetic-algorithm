@@ -9,7 +9,7 @@ from BinPacking import bin_packing
 import Baldwin
 from GeneticProgramming import GP_tree
 
-GA_POPSIZE = 1000
+
 GA_ELITRATE = 0.1
 GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
@@ -100,7 +100,8 @@ class Genome:
 
 class Population:
 
-    def __init__(self, problem=0, speciation_threshold=6.3):
+    def __init__(self, problem=0, pop_size=1000, speciation_threshold=6.3):
+        self.pop_size = pop_size
         self.genomes = []
         self.buffer = []
         self.mutation_rate = 0.25
@@ -114,36 +115,32 @@ class Population:
     def init_population(self, N=None):
         """ Population initialize - if is_queen is True we will generate random permutation of integers with the given
             range. """
-        global GA_POPSIZE
 
         tsize = len(GA_TARGET)
         #   Solving N Queens problem
         if self.problem == 0:
-            GA_POPSIZE = 1000
-            for i in range(GA_POPSIZE):
+            for i in range(self.pop_size):
                 game = n_queens(N=N)
                 self.genomes.append(Genome(game))
                 self.buffer.append(Genome(gene=game))  # We will append empty Genome instead of doing resize
 
         #   Solving Knap Sack problem
         elif self.problem == 1:
-            for i in range(GA_POPSIZE):
+            for i in range(self.pop_size):
                 sack = knap_sack(N=N)
                 self.genomes.append(Genome(gene=sack))
                 self.buffer.append(Genome(gene=knap_sack()))  # We will append empty Genome instead of doing resize
 
         #   Solving String problem
         elif self.problem == 2:
-            GA_POPSIZE = 5000
-            for i in range(GA_POPSIZE):
+            for i in range(self.pop_size):
                 _bool = bool_pgia(GA_TARGET, tsize)
                 self.genomes.append(Genome(gene=_bool))
                 self.buffer.append(Genome(gene=bool_pgia(GA_TARGET)))
 
         #   Solving Bin packing problem
         elif self.problem == 3:
-            GA_POPSIZE = 400
-            for i in range(GA_POPSIZE):
+            for i in range(self.pop_size):
                 bins = bin_packing(N, False)
                 self.genomes.append(Genome(gene=bins))
                 self.buffer.append(Genome(gene=bin_packing(N, True)))
@@ -153,19 +150,14 @@ class Population:
             # Create random target
             random_target = ''.join(random.choices(Baldwin.Alphabet, k=20))
             Baldwin.TARGET = list(random_target)
-
-            for i in range(1000):
+            for i in range(self.pop_size):
                 rand_solution = Baldwin.BaldwinEffectProblem.initialize_citizen()
                 self.genomes.append(Genome(Baldwin.BaldwinEffectProblem(rand_solution=rand_solution), fitness=1))
                 self.buffer.append(Genome(gene=Baldwin.BaldwinEffectProblem(), fitness=1))
 
         #   Solving for genetic programming
         elif self.problem == 6 or self.problem == 7:
-            if self.problem == 7:
-                GA_POPSIZE = 1000
-            else:
-                GA_POPSIZE = 3000
-            half_pop = int(GA_POPSIZE / 2)
+            half_pop = int(self.pop_size / 2)
             # Ramp half and half
             for i in range(half_pop):
                 grow_tree = GP_tree()
@@ -178,7 +170,7 @@ class Population:
                 self.buffer.append(Genome(gene=[]))
 
     def calc_fitness(self):
-        for i in range(GA_POPSIZE):
+        for i in range(self.pop_size):
             temp_fitness = self.genomes[i].calc_individual_fitness()
             self.genomes[i].fitness = temp_fitness
 
@@ -200,17 +192,17 @@ class Population:
         if self.problem == 6:
             GA_ELITRATE = 0.05
 
-        esize = int(GA_POPSIZE * GA_ELITRATE)
+        esize = int(self.pop_size * GA_ELITRATE)
         self.elitism(esize)
 
         # If we choose parent selection then we will choose parents as the number of psize-esize
         if selection_method == 1:
-            num_of_parents = GA_POPSIZE - esize
+            num_of_parents = self.pop_size - esize
             # Parents selection method - SUS
             self.genomes[esize:] = self.SUS(num_of_parents=num_of_parents)
 
         elif selection_method == 2:
-            num_of_parents = GA_POPSIZE - esize
+            num_of_parents = self.pop_size - esize
             self.genomes[esize:] = self.tournament_selection(num_of_parents=num_of_parents, esize=esize)
 
         if cross_method == 1:
@@ -302,9 +294,9 @@ class Population:
     def one_point_crossover(self, esize):
         tsize = len(GA_TARGET)
 
-        for i in range(esize, GA_POPSIZE):
-            i1 = randint(0, int(GA_POPSIZE / 2) - 1)
-            i2 = randint(0, int(GA_POPSIZE / 2) - 1)
+        for i in range(esize, self.pop_size):
+            i1 = randint(0, int(self.pop_size / 2) - 1)
+            i2 = randint(0, int(self.pop_size / 2) - 1)
             spos = randint(0, tsize - 2)
 
             obj = self.genomes[i1].gene[:spos] + self.genomes[i2].gene[spos:]
@@ -319,10 +311,10 @@ class Population:
     def two_point_crossover(self, esize):
         tsize = len(GA_TARGET)
 
-        for i in range(esize, GA_POPSIZE):
+        for i in range(esize, self.pop_size):
             # picking 2 genomes
-            i1 = randint(0, int(GA_POPSIZE / 2) - 1)
-            i2 = randint(0, int(GA_POPSIZE / 2) - 1)
+            i1 = randint(0, int(self.pop_size / 2) - 1)
+            i2 = randint(0, int(self.pop_size / 2) - 1)
 
             # picking 2 points
             spos_1 = randint(0, tsize - 2)
@@ -340,11 +332,11 @@ class Population:
 
     def uniform_crossover(self, esize):
         tsize = len(self.genomes[0].gene)
-        for i in range(esize, GA_POPSIZE):
+        for i in range(esize, self.pop_size):
             obj = [None] * tsize
             # picking 2 genomes
-            i1 = randint(0, int(GA_POPSIZE / 2) - 1)
-            i2 = randint(0, int(GA_POPSIZE / 2) - 1)
+            i1 = randint(0, int(self.pop_size / 2) - 1)
+            i2 = randint(0, int(self.pop_size / 2) - 1)
 
             for j in range(tsize):
                 if random.random() <= UNIFORM_PR:
@@ -359,15 +351,15 @@ class Population:
 
     def ordered_crossover(self, esize):
         tsize = self.genomes[0].gene.N
-        for i in range(esize, GA_POPSIZE):
+        for i in range(esize, self.pop_size):
             obj = []
             obj_1 = []
             obj_2 = []
             remains = []
 
             # picking 2 genomes
-            i1 = randint(0, GA_POPSIZE - 2)
-            i2 = randint(i1, GA_POPSIZE - 1)
+            i1 = randint(0, self.pop_size - 2)
+            i2 = randint(i1, self.pop_size - 1)
 
             # picking 2 points
             spos_1 = randint(0, tsize - 2)
@@ -427,14 +419,14 @@ class Population:
 
     def CX_crossover(self, esize):
         tsize = len(self.genomes[0].gene)
-        for j in range(esize, GA_POPSIZE, 2):
+        for j in range(esize, self.pop_size, 2):
             # first we will create the cycle
             cycles = [-10] * tsize
             cycle_count = 1
 
             # picking 2 genomes
-            i1 = randint(0, int(GA_POPSIZE / 2) - 1)
-            i2 = randint(0, int(GA_POPSIZE / 2) - 1)
+            i1 = randint(0, int(self.pop_size / 2) - 1)
+            i2 = randint(0, int(self.pop_size / 2) - 1)
 
             point_generator = (i for i, v in enumerate(cycles) if v < 0)
 
@@ -463,13 +455,13 @@ class Population:
                 Genome.scramble_mutation(self.buffer[j + 1], self.num_of_mutations)
 
     def trees_crossover(self, esize):
-        new_pop = GA_POPSIZE - esize
+        new_pop = self.pop_size - esize
 
         i = 0
         while i != new_pop:
             # picking 2 genomes
-            i1 = randint(0, int(GA_POPSIZE / 2) - 2)
-            i2 = randint(i1 + 1, int(GA_POPSIZE / 2) - 1)
+            i1 = randint(0, int(self.pop_size / 2) - 2)
+            i2 = randint(i1 + 1, int(self.pop_size / 2) - 1)
 
             # The next step will be decided due to some probability
             random_decision = random.random()
@@ -528,14 +520,14 @@ class Population:
                 while cum_fitness <= points[i]:
                     cum_fitness += self.genomes[inv].get_fitness()
                     inv += 1
-                if len(selected) > num_of_parents or inv >= GA_POPSIZE:
+                if len(selected) > num_of_parents or inv >= self.pop_size:
                     break
                 selected.add(self.genomes[inv])
 
         return selected
 
     def over_selection(self, esize):
-        pop_size = GA_POPSIZE-esize+1
+        pop_size = self.pop_size-esize+1
         """ Implementation of over selection method """
         x = int((pop_size*4)/100)     # Taking 4% of the population
         first_range = int((pop_size*80)/100)
@@ -564,7 +556,7 @@ class Population:
             best_inv = None
 
             # Choose k random indexes from the population
-            inv_to_check = set(np.random.randint(GA_POPSIZE, size=k))
+            inv_to_check = set(np.random.randint(self.pop_size, size=k))
             if random.random() > pr * (1 - pr) ** len(selected):
                 # Getting the best gene
                 for inv in inv_to_check:
@@ -590,10 +582,10 @@ class Population:
         sigma_share = 4.5
         tsize = self.genomes[0].gene.N
 
-        sharing_matrix = np.zeros((GA_POPSIZE, GA_POPSIZE))
+        sharing_matrix = np.zeros((self.pop_size, self.pop_size))
         distance_matrix = []
-        for i in range(0, GA_POPSIZE):
-            for j in range(i + 1, GA_POPSIZE):
+        for i in range(0, self.pop_size):
+            for j in range(i + 1, self.pop_size):
                 distance = self.genomes[i].gene.calc_distance(self.genomes[j].gene) / tsize
                 distance_matrix.append(distance)
                 sharing_matrix[i, j] = self.sharing_function(distance, sigma_share=sigma_share, alpha=alpha)
@@ -619,7 +611,7 @@ class Population:
         """ Make species_list """
 
         self.species_list = [[0]]
-        for i in range(1, GA_POPSIZE):
+        for i in range(1, self.pop_size):
             selected_species, flag = self.find_species(i)
             if flag is False and i != 0:  # If we didnt find matching species we will add one
                 self.species_list.append([])  # initialize a new species
@@ -662,7 +654,7 @@ class Population:
 
     def calc_similarity(self):
         # We will sample 10% of the population to measure distances
-        sampled_list = random.sample(range(GA_POPSIZE), round(GA_POPSIZE * 10 / 100))
+        sampled_list = random.sample(range(self.pop_size), round(self.pop_size * 10 / 100))
         max_distance = 0
         distance = 0
 
