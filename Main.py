@@ -25,9 +25,13 @@ class myThread(threading.Thread):
         self.N = N
         self.question = question
         self.problem = problem
+        self.migration_list = []
 
     def run(self):
         run_genetic_algo(self.problem, self.N, self.question)
+
+    def set_migration_list(self, migration_list):
+        self.migration_list = migration_list
 
 
 def get_args(question):
@@ -89,15 +93,19 @@ def run_genetic_algo(problem, N, question):
 
     # If its N Queens problem
     if problem == 0:
-        if current_thread == 'Thread-2':
-            pop_size = 500
+        pop_size = 800
+        if current_thread == 'Thread-5':
             selection_method = 1
             cross_method = 5
-
+        elif current_thread == 'Thread-4':
+            selection_method = 1
+            cross_method = 5
+        elif current_thread == 'Thread-3':
+            selection_method = 2
+            cross_method = 5
         else:
             selection_method = 2
             cross_method = 4
-            pop_size = 1000
 
     # If its Knap Sack problem
     elif problem == 1:
@@ -105,12 +113,12 @@ def run_genetic_algo(problem, N, question):
         max_iter = KS_MAXITER
         OP = probs[N][3]
 
-        if current_thread == 'Thread-2':
+        if current_thread == 'Thread-1':
             pop_size = 500
             selection_method = 0
             cross_method = 1
 
-        elif current_thread == 'Thread-3':
+        elif current_thread == 'Thread-2':
             pop_size = 500
             selection_method = 1
             cross_method = 2
@@ -118,18 +126,18 @@ def run_genetic_algo(problem, N, question):
         else:
             selection_method = 2
             cross_method = 2
-            pop_size = 1000
+            pop_size = 500
 
     # If its String problem
     elif problem == 2:
-        if current_thread == 'Thread-2':
+        if current_thread == 'Thread-1':
             pop_size = 500
             selection_method = 0    # No selection
-        elif current_thread == 'Thread-3':
+        elif current_thread == 'Thread-2':
             pop_size = 500
             selection_method = 1    # SUS
         else:
-            pop_size = 5000
+            pop_size = 500
             selection_method = 2    # Tournament Selection
 
     # If its Bin packing problem
@@ -259,12 +267,14 @@ def run_genetic_algo(problem, N, question):
             print(f'{current_thread} terminated')
             break
 
+        current_population.migration()
         current_population.mate(cross_method=cross_method, selection_method=selection_method)
         current_population.swap()
 
         print(f'For thread {current_thread}:\nGeneration running time for iteration {i}: ',
               time() - generation_start_time)
 
+    Genetic.PROGRAM_TERMINATED = True
     print('Absolute running time: ', time() - start_time)
 
     # elif problem == 3:
@@ -328,18 +338,21 @@ def multi_threading_ga(problem, N, question):
     thread2 = myThread(2, "Thread-2", N, question, problem)
     thread3 = myThread(3, "Thread-3", N, question, problem)
     thread4 = myThread(4, "Thread-4", N, question, problem)
+    thread5 = myThread(5, "Thread-5", N, question, problem)
 
     # Start new Threads
     thread1.start()
     thread2.start()
     thread3.start()
     thread4.start()
+    thread5.start()
 
     # Waiting for threads to terminate
     thread1.join()
     thread2.join()
     thread3.join()
     thread4.join()
+    thread5.join()
 
     # print final board if its N Queens
     if problem == 0:

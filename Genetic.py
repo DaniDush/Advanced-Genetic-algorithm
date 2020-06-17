@@ -1,7 +1,10 @@
-from random import randint, shuffle
+import time
+from random import randint, shuffle, sample
 import random
 import numpy as np
 from copy import deepcopy
+import threading
+
 from NQueens import n_queens
 from KnapSack import knap_sack
 from BoolPegia import bool_pgia
@@ -9,12 +12,20 @@ from BinPacking import bin_packing
 import Baldwin
 from GeneticProgramming import GP_tree
 
-
 GA_ELITRATE = 0.1
 GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
 WEIGHT_BOUND = 100
+THREAD_1_MIGRATION = [[] for i in range(5)]
+THREAD_2_MIGRATION = [[] for i in range(5)]
+THREAD_3_MIGRATION = [[] for i in range(5)]
+THREAD_4_MIGRATION = [[] for i in range(5)]
+THREAD_5_MIGRATION = [[] for i in range(5)]
+
+PrintLock = threading.Lock()
+threadLock = threading.Lock()
+PROGRAM_TERMINATED = False
 
 
 class Genome:
@@ -111,6 +122,7 @@ class Population:
         self.optimal_species = 30
         self.distance_matrix = []
         self.num_of_mutations = 1
+        self.migration_list = []
 
     def init_population(self, N=None):
         """ Population initialize - if is_queen is True we will generate random permutation of integers with the given
@@ -284,7 +296,9 @@ class Population:
 
             return avg_fitness, std_fitness, avg_true, avg_false, avg_learned
 
+        PrintLock.acquire()
         print('Average fitness:', avg_fitness, '\nStandard deviation: ', std_fitness, '\n')
+        PrintLock.release()
 
         return avg_fitness, std_fitness
 
@@ -478,13 +492,13 @@ class Population:
                 child_2 = deepcopy(self.genomes[i2].gene)
                 child_2.branch_swap(temp_branch, copy=False)
 
-                self.buffer[i+esize].gene = child_1
+                self.buffer[i + esize].gene = child_1
 
                 if i + 1 == new_pop:
                     i += 1
 
                 else:
-                    self.buffer[i+1+esize].gene = child_2
+                    self.buffer[i + 1 + esize].gene = child_2
                     i += 2
 
             # Mutation
@@ -492,12 +506,12 @@ class Population:
                 child = deepcopy(self.genomes[i1])
                 child.gene.reservoir_sampling(pr=0.5)
                 child.branch_mutation()
-                self.buffer[i+esize] = child
+                self.buffer[i + esize] = child
                 i += 1
 
             # Recombination
             else:
-                self.buffer[i+esize] = self.genomes[i1]
+                self.buffer[i + esize] = self.genomes[i1]
                 i += 1
 
     def SUS(self, num_of_parents):
@@ -527,14 +541,14 @@ class Population:
         return selected
 
     def over_selection(self, esize):
-        pop_size = self.pop_size-esize+1
+        pop_size = self.pop_size - esize + 1
         """ Implementation of over selection method """
-        x = int((pop_size*4)/100)     # Taking 4% of the population
-        first_range = int((pop_size*80)/100)
+        x = int((4 / pop_size) * 100)  # Taking 4% of the population
+        first_range = int((pop_size * 80) / 100)
         choose_from = self.genomes[0:x]
         new_population = random.choices(choose_from, k=first_range)
-        choose_from = self.genomes[x+1:]
-        new_population.extend(random.choices(choose_from, k=pop_size-first_range))
+        choose_from = self.genomes[x + 1:]
+        new_population.extend(random.choices(choose_from, k=pop_size - first_range))
         self.genomes[esize:] = new_population
 
     def tournament_selection(self, num_of_parents, esize):
@@ -677,3 +691,115 @@ class Population:
             distance += 1
 
         return distance
+
+    def migration(self):
+        global THREAD_1_MIGRATION, THREAD_2_MIGRATION, THREAD_3_MIGRATION, THREAD_4_MIGRATION, THREAD_5_MIGRATION
+        # Taking 8% from the population
+        num_of_inv = int((8 * self.pop_size) / 100)
+
+        threadLock.acquire()
+        # Taking 4% from first half (Fitness-based)
+        choose_from = self.genomes[0:int(self.pop_size / 2)]
+        migration_list = random.choices(choose_from, k=int(num_of_inv / 2))
+        # Taking 4% from Second half (Random-based)
+        choose_from = self.genomes[int(self.pop_size / 2):]
+        migration_list.extend(random.choices(choose_from, k=int(num_of_inv / 2)))
+
+        shuffle(migration_list)
+        threadLock.release()
+
+        thread_name = threading.current_thread().getName()
+
+        if thread_name == 'Thread-1':
+            THREAD_1_MIGRATION[1] = (migration_list[0:int(num_of_inv / 4)])
+            THREAD_1_MIGRATION[2] = (migration_list[int(num_of_inv / 4):2 * int(num_of_inv / 4)])
+            THREAD_1_MIGRATION[3] = (migration_list[2 * int(num_of_inv / 4):3 * int(num_of_inv / 4)])
+            THREAD_1_MIGRATION[4] = (migration_list[3 * int(num_of_inv / 4):])
+
+        elif thread_name == 'Thread-2':
+            THREAD_2_MIGRATION[0] = (migration_list[0:int(num_of_inv / 4)])
+            THREAD_2_MIGRATION[2] = (migration_list[int(num_of_inv / 4):2 * int(num_of_inv / 4)])
+            THREAD_2_MIGRATION[3] = (migration_list[2 * int(num_of_inv / 4):3 * int(num_of_inv / 4)])
+            THREAD_2_MIGRATION[4] = (migration_list[3 * int(num_of_inv / 4):])
+
+        elif thread_name == 'Thread-3':
+            THREAD_3_MIGRATION[0] = (migration_list[0:int(num_of_inv / 4)])
+            THREAD_3_MIGRATION[1] = (migration_list[int(num_of_inv / 4):2 * int(num_of_inv / 4)])
+            THREAD_3_MIGRATION[3] = (migration_list[2 * int(num_of_inv / 4):3 * int(num_of_inv / 4)])
+            THREAD_3_MIGRATION[4] = (migration_list[3 * int(num_of_inv / 4):])
+
+        elif thread_name == 'Thread-4':
+            THREAD_4_MIGRATION[0] = (migration_list[0:int(num_of_inv / 4)])
+            THREAD_4_MIGRATION[1] = (migration_list[int(num_of_inv / 4):2 * int(num_of_inv / 4)])
+            THREAD_4_MIGRATION[2] = (migration_list[2 * int(num_of_inv / 4):3 * int(num_of_inv / 4)])
+            THREAD_4_MIGRATION[4] = (migration_list[3 * int(num_of_inv / 4):])
+
+        elif thread_name == 'Thread-5':
+            THREAD_5_MIGRATION[0] = (migration_list[0:int(num_of_inv / 4)])
+            THREAD_5_MIGRATION[1] = (migration_list[int(num_of_inv / 4):2 * int(num_of_inv / 4)])
+            THREAD_5_MIGRATION[2] = (migration_list[2 * int(num_of_inv / 4):3 * int(num_of_inv / 4)])
+            THREAD_5_MIGRATION[3] = (migration_list[3 * int(num_of_inv / 4):])
+
+        self.perform_migration(thread_name, migration_list)
+
+    def perform_migration(self, thread_name, migration_list):
+
+        if thread_name == 'Thread-1':
+            while not THREAD_2_MIGRATION[0] or not THREAD_3_MIGRATION[0] or not THREAD_4_MIGRATION[0] or not \
+                    THREAD_5_MIGRATION[0]:
+                return
+
+            self.genomes = self.genomes + THREAD_2_MIGRATION[0] + THREAD_3_MIGRATION[0] + THREAD_4_MIGRATION[0] + \
+                           THREAD_5_MIGRATION[0]
+
+            # Clear the incoming migrations for newer
+            THREAD_2_MIGRATION[0], THREAD_3_MIGRATION[0], THREAD_4_MIGRATION[0], THREAD_5_MIGRATION[0] = [], [], [], []
+
+        elif thread_name == 'Thread-2':
+
+            while not THREAD_1_MIGRATION[1] or not THREAD_3_MIGRATION[1] or not THREAD_4_MIGRATION[1] or not \
+                    THREAD_5_MIGRATION[1]:
+                return
+            self.genomes = self.genomes + THREAD_1_MIGRATION[1] + THREAD_3_MIGRATION[1] + THREAD_4_MIGRATION[1] + \
+                           THREAD_5_MIGRATION[1]
+
+            # Clear the incoming migrations for newer
+            THREAD_1_MIGRATION[1], THREAD_3_MIGRATION[1], THREAD_4_MIGRATION[1], THREAD_5_MIGRATION[1] = [], [], [], []
+
+        elif thread_name == 'Thread-3':
+
+            while not THREAD_1_MIGRATION[2] or not THREAD_2_MIGRATION[2] or not THREAD_4_MIGRATION[2] or not \
+                    THREAD_5_MIGRATION[2]:
+                return
+            self.genomes = self.genomes + THREAD_1_MIGRATION[2] + THREAD_2_MIGRATION[2] + THREAD_4_MIGRATION[2] + \
+                           THREAD_5_MIGRATION[2]
+
+            # Clear the incoming migrations for newer
+            THREAD_1_MIGRATION[2], THREAD_2_MIGRATION[2], THREAD_4_MIGRATION[2], THREAD_5_MIGRATION[2] = [], [], [], []
+
+        elif thread_name == 'Thread-4':
+            while not THREAD_1_MIGRATION[3] or not THREAD_2_MIGRATION[3] or not THREAD_3_MIGRATION[3] or not \
+                    THREAD_5_MIGRATION[2]:
+                return
+            self.genomes = self.genomes + THREAD_1_MIGRATION[3] + THREAD_2_MIGRATION[3] + THREAD_3_MIGRATION[3] + \
+                           THREAD_5_MIGRATION[3]
+
+            # Clear the incoming migrations for newer
+            THREAD_1_MIGRATION[3], THREAD_2_MIGRATION[3], THREAD_3_MIGRATION[3], THREAD_5_MIGRATION[3] = [], [], [], []
+
+        elif thread_name == 'Thread-5':
+            while not THREAD_1_MIGRATION[4] or not THREAD_2_MIGRATION[4] or not THREAD_3_MIGRATION[4] or not \
+                    THREAD_4_MIGRATION[4]:
+                return
+            self.genomes = self.genomes + THREAD_1_MIGRATION[4] + THREAD_2_MIGRATION[4] + THREAD_3_MIGRATION[4] + \
+                           THREAD_4_MIGRATION[4]
+
+            # Clear the incoming migrations for newer
+            THREAD_1_MIGRATION[4], THREAD_2_MIGRATION[4], THREAD_3_MIGRATION[4], THREAD_4_MIGRATION[4] = [], [], [], []
+
+        print("Migration performed")
+        for individual in migration_list:
+            try:
+                self.genomes.remove(individual)
+            except ValueError:
+                pass
