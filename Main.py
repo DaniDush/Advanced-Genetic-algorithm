@@ -12,9 +12,10 @@ import threading
 GA_MAXITER = 150
 KS_MAXITER = 30
 species_thres = [4.3, 6.3, 8.91, 12.7]
-spec_thres_3 = 0.1
+spec_thres_3 = None
 GLOBAL_BEST = None
 threadLock = threading.Lock()
+ISLANDS = []
 
 
 class myThread(threading.Thread):
@@ -25,13 +26,22 @@ class myThread(threading.Thread):
         self.N = N
         self.question = question
         self.problem = problem
-        self.migration_list = []
+        self.island = None
+        self.is_working = False
 
     def run(self):
         run_genetic_algo(self.problem, self.N, self.question)
 
-    def set_migration_list(self, migration_list):
-        self.migration_list = migration_list
+    def set_population(self, population):
+        self.island = population
+
+    def receive_migrants(self, migrants):
+        while self.island is None:  # Waiting for island creation
+            pass
+        self.island.receive_migrants(migrants)
+
+    def set_is_working(self, flag):
+        self.is_working = flag
 
 
 def get_args(question):
@@ -109,7 +119,7 @@ def run_genetic_algo(problem, N, question):
 
     # If its Knap Sack problem
     elif problem == 1:
-        spec_threshold = 1
+        spec_threshold = 0.5
         max_iter = KS_MAXITER
         OP = probs[N][3]
 
@@ -130,15 +140,14 @@ def run_genetic_algo(problem, N, question):
 
     # If its String problem
     elif problem == 2:
+        pop_size = 600
+
         if current_thread == 'Thread-1':
-            pop_size = 500
-            selection_method = 0    # No selection
+            selection_method = 0  # No selection
         elif current_thread == 'Thread-2':
-            pop_size = 500
-            selection_method = 1    # SUS
+            selection_method = 1  # SUS
         else:
-            pop_size = 500
-            selection_method = 2    # Tournament Selection
+            selection_method = 2  # Tournament Selection
 
     # If its Bin packing problem
     elif problem == 3:
@@ -163,7 +172,7 @@ def run_genetic_algo(problem, N, question):
 
     # GP - MATH
     elif problem == 7:
-        max_iter = 30000    # Will terminate before max_iter
+        max_iter = 30000  # Will terminate before max_iter
         cross_method = 6
         selection_method = 2
         pop_size = 1000
@@ -176,6 +185,7 @@ def run_genetic_algo(problem, N, question):
         current_population = Genetic.Population(problem=problem, pop_size=pop_size)
 
     current_population.init_population(N=N)
+    threading.currentThread().set_population(current_population)
 
     for i in range(max_iter):
         generation_start_time = time()
@@ -267,7 +277,8 @@ def run_genetic_algo(problem, N, question):
             print(f'{current_thread} terminated')
             break
 
-        current_population.migration()
+        current_population.spread_migrants()
+        current_population.perform_migration()
         current_population.mate(cross_method=cross_method, selection_method=selection_method)
         current_population.swap()
 
@@ -340,6 +351,12 @@ def multi_threading_ga(problem, N, question):
     thread4 = myThread(4, "Thread-4", N, question, problem)
     thread5 = myThread(5, "Thread-5", N, question, problem)
 
+    ISLANDS.append(thread1)
+    ISLANDS.append(thread2)
+    ISLANDS.append(thread3)
+    ISLANDS.append(thread4)
+    ISLANDS.append(thread5)
+    Genetic.ISLANDS = ISLANDS
     # Start new Threads
     thread1.start()
     thread2.start()
