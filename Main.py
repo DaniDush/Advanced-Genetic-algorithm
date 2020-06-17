@@ -27,7 +27,6 @@ class myThread(threading.Thread):
         self.question = question
         self.problem = problem
         self.island = None
-        self.is_working = False
 
     def run(self):
         run_genetic_algo(self.problem, self.N, self.question)
@@ -39,9 +38,6 @@ class myThread(threading.Thread):
         while self.island is None:  # Waiting for island creation
             pass
         self.island.receive_migrants(migrants)
-
-    def set_is_working(self, flag):
-        self.is_working = flag
 
 
 def get_args(question):
@@ -77,9 +73,9 @@ def run_minimal_conflicts(N):
 def run_genetic_algo(problem, N, question):
     global GLOBAL_BEST
     pop_size = 1000
-    current_thread = threading.currentThread().getName()
+    current_island = threading.currentThread().getName()
 
-    print(f"{current_thread} Activated \n")
+    print(f"{current_island} Activated \n")
     ######################################################################
     # Initialize local optima vars
     similarity_threshold = 1
@@ -103,14 +99,14 @@ def run_genetic_algo(problem, N, question):
 
     # If its N Queens problem
     if problem == 0:
-        pop_size = 800
-        if current_thread == 'Thread-5':
+        pop_size = 2000
+        if current_island == 'Island-5':
             selection_method = 1
             cross_method = 5
-        elif current_thread == 'Thread-4':
+        elif current_island == 'Island-4':
             selection_method = 1
             cross_method = 5
-        elif current_thread == 'Thread-3':
+        elif current_island == 'Island-3':
             selection_method = 2
             cross_method = 5
         else:
@@ -123,12 +119,12 @@ def run_genetic_algo(problem, N, question):
         max_iter = KS_MAXITER
         OP = probs[N][3]
 
-        if current_thread == 'Thread-1':
+        if current_island == 'Island-1':
             pop_size = 500
             selection_method = 0
             cross_method = 1
 
-        elif current_thread == 'Thread-2':
+        elif current_island == 'Island-2':
             pop_size = 500
             selection_method = 1
             cross_method = 2
@@ -142,9 +138,9 @@ def run_genetic_algo(problem, N, question):
     elif problem == 2:
         pop_size = 600
 
-        if current_thread == 'Thread-1':
+        if current_island == 'Island-1':
             selection_method = 0  # No selection
-        elif current_thread == 'Thread-2':
+        elif current_island == 'Island-2':
             selection_method = 1  # SUS
         else:
             selection_method = 2  # Tournament Selection
@@ -184,8 +180,9 @@ def run_genetic_algo(problem, N, question):
     else:
         current_population = Genetic.Population(problem=problem, pop_size=pop_size)
 
-    current_population.init_population(N=N)
     threading.currentThread().set_population(current_population)
+
+    current_population.init_population(N=N)
 
     for i in range(max_iter):
         generation_start_time = time()
@@ -265,16 +262,16 @@ def run_genetic_algo(problem, N, question):
             #####################################################################
         if problem == 1:
             if OP == GLOBAL_BEST.gene.sack:
-                print(f'{current_thread} terminated')
+                print(f'{current_island} terminated')
                 break
 
         if problem == 7:
             if GeneticProgramming.IS_TERMINATE:
-                print(f'{current_thread} terminated')
+                print(f'{current_island} terminated')
                 break
 
         if GLOBAL_BEST.fitness is 0 and (problem == 0 or problem == 2):
-            print(f'{current_thread} terminated')
+            print(f'{current_island} terminated')
             break
 
         current_population.spread_migrants()
@@ -282,7 +279,7 @@ def run_genetic_algo(problem, N, question):
         current_population.mate(cross_method=cross_method, selection_method=selection_method)
         current_population.swap()
 
-        print(f'For thread {current_thread}:\nGeneration running time for iteration {i}: ',
+        print(f'For thread {current_island}:\nGeneration running time for iteration {i}: ',
               time() - generation_start_time)
 
     Genetic.PROGRAM_TERMINATED = True
@@ -345,11 +342,11 @@ def multi_threading_ga(problem, N, question):
         GeneticProgramming.PROBLEM = 'M'
 
     # Create new threads
-    thread1 = myThread(1, "Thread-1", N, question, problem)
-    thread2 = myThread(2, "Thread-2", N, question, problem)
-    thread3 = myThread(3, "Thread-3", N, question, problem)
-    thread4 = myThread(4, "Thread-4", N, question, problem)
-    thread5 = myThread(5, "Thread-5", N, question, problem)
+    thread1 = myThread(1, "Island-1", N, question, problem)
+    thread2 = myThread(2, "Island-2", N, question, problem)
+    thread3 = myThread(3, "Island-3", N, question, problem)
+    thread4 = myThread(4, "Island-4", N, question, problem)
+    thread5 = myThread(5, "Island-5", N, question, problem)
 
     ISLANDS.append(thread1)
     ISLANDS.append(thread2)

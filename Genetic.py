@@ -694,10 +694,10 @@ class Population:
 
     def spread_migrants(self):
         current_island = threading.currentThread().getName()
-        num_of_inv = int((2 * self.pop_size) / 100)
+        num_of_inv = int((2 * self.pop_size) / 100)     # Taking 2% from the population
 
         for i, island in enumerate(ISLANDS):
-            if island.getName != current_island:
+            if island.getName() != current_island:
 
                 # Taking 1% from first half (Fitness-based)
                 choose_from = self.genomes[0:int(self.pop_size / 2)]
@@ -705,7 +705,6 @@ class Population:
                 # Taking 1% from Second half (Random-based)
                 choose_from = self.genomes[int(self.pop_size / 2):]
                 immigrants.extend(random.choices(choose_from, k=int(num_of_inv / 2)))
-                shuffle(immigrants)
 
                 # Sending the migrants to different island
                 island.receive_migrants(immigrants)
