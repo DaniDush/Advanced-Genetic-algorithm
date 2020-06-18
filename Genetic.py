@@ -4,6 +4,7 @@ import random
 import numpy as np
 from copy import deepcopy
 import threading
+from heapq import merge
 
 from NQueens import n_queens
 from KnapSack import knap_sack
@@ -261,10 +262,8 @@ class Population:
 
         return self.genomes[i]
 
-    def print_best(self):
+    def get_best(self):
         best_inv = self.get_best_fitness()
-        print('Best: ', best_inv.gene, '(', best_inv.fitness, ')')
-
         return best_inv
 
     def calc_avg_std(self):
@@ -699,20 +698,21 @@ class Population:
         for i, island in enumerate(ISLANDS):
             if island.getName() != current_island:
 
-                # Taking 1% from first half (Fitness-based)
+                # Taking 2% from first half (Fitness-based)
                 choose_from = self.genomes[0:int(self.pop_size / 2)]
-                immigrants = random.choices(choose_from, k=int(num_of_inv / 2))
+                immigrants = random.choices(choose_from, k=int(num_of_inv))
                 # Taking 1% from Second half (Random-based)
-                choose_from = self.genomes[int(self.pop_size / 2):]
-                immigrants.extend(random.choices(choose_from, k=int(num_of_inv / 2)))
+                # choose_from = self.genomes[int(self.pop_size / 2):]
+                # immigrants.extend(random.choices(choose_from, k=int(num_of_inv / 2)))
 
                 # Sending the migrants to different island
-                island.receive_migrants(immigrants)
+                island.receive_migrants(sorted(immigrants))
 
     def receive_migrants(self, immigrants):
         # Receive migrants from another island
         threadLock.acquire()
-        self.migrants_list += deepcopy(immigrants)
+        # Using heap to optimize merge
+        self.migrants_list = list(merge(deepcopy(immigrants), self.migrants_list))
         threadLock.release()
 
     def perform_migration(self):
@@ -720,7 +720,9 @@ class Population:
         if self.migrants_list:
             threadLock.acquire()
             print("Migration performed")
-            num_of_migrants = len(self.migrants_list)
-            self.genomes[-num_of_migrants:] = self.migrants_list
+            migration_size = len(self.migrants_list)
+            self.genomes = self.genomes[:-migration_size]
+            self.genomes = list(merge(self.genomes, self.migrants_list))
+
             self.migrants_list = []
             threadLock.release()

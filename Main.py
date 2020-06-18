@@ -101,10 +101,12 @@ def run_genetic_algo(problem, N, question):
     if problem == 0:
         pop_size = 2000
         if current_island == 'Island-5':
-            selection_method = 1
+            pop_size = 800
+            selection_method = 2
             cross_method = 5
         elif current_island == 'Island-4':
-            selection_method = 1
+            pop_size = 1000
+            selection_method = 0
             cross_method = 5
         elif current_island == 'Island-3':
             selection_method = 2
@@ -126,21 +128,23 @@ def run_genetic_algo(problem, N, question):
 
         elif current_island == 'Island-2':
             pop_size = 500
-            selection_method = 1
+            selection_method = 2
             cross_method = 2
 
         else:
             selection_method = 2
             cross_method = 2
-            pop_size = 500
+            pop_size = 1000
 
     # If its String problem
     elif problem == 2:
         pop_size = 600
 
         if current_island == 'Island-1':
+            pop_size = 1000
             selection_method = 0  # No selection
         elif current_island == 'Island-2':
+            pop_size = 500
             selection_method = 1  # SUS
         else:
             selection_method = 2  # Tournament Selection
@@ -196,7 +200,10 @@ def run_genetic_algo(problem, N, question):
             print(f"Current number of species: {number_of_species} ")
 
         current_population.sort_by_fitness()
-        best_inv = current_population.print_best()
+        current_population.spread_migrants()
+        current_population.perform_migration()
+
+        best_inv = current_population.get_best()
 
         ################ Synchronize Area ################
         # Setting global best
@@ -208,9 +215,12 @@ def run_genetic_algo(problem, N, question):
             if problem == 1 or problem == 3 or problem == 4 or problem == 6:
                 if best_inv.fitness > GLOBAL_BEST.fitness:
                     GLOBAL_BEST = best_inv
+                    print('Best: ', GLOBAL_BEST.gene, '(', GLOBAL_BEST.fitness, ')')
             else:
                 if best_inv.fitness < GLOBAL_BEST.fitness:
                     GLOBAL_BEST = best_inv
+                    print('Best: ', GLOBAL_BEST.gene, '(', GLOBAL_BEST.fitness, ')')
+
         threadLock.release()
         ################ Synchronize Area ################
 
@@ -274,8 +284,6 @@ def run_genetic_algo(problem, N, question):
             print(f'{current_island} terminated')
             break
 
-        current_population.spread_migrants()
-        current_population.perform_migration()
         current_population.mate(cross_method=cross_method, selection_method=selection_method)
         current_population.swap()
 
