@@ -11,6 +11,7 @@ class knap_sack:
     def __init__(self, N=None):
         global WL, W, V
         self.sack = []
+        sack_size = 0
         if N is not None:
             WL = probs[N][0]
             W = probs[N][1]
@@ -19,7 +20,7 @@ class knap_sack:
             for j in range(sack_size):
                 # Adding random solution
                 self.sack.append(randint(0, 1))
-        self.N = N
+        self.N = sack_size
 
     def __len__(self):
         return self.N

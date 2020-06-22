@@ -15,6 +15,7 @@ class bin_packing:
 
         self.N = N
         self.sum_of_bins = []
+        self.empty_bins = 0
 
     def get_sum_of_bin(self, idx):
         sum_of_bin = 0

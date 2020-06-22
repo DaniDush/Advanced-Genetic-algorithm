@@ -1,4 +1,4 @@
-from pathlib import Path
+from copy import deepcopy
 from time import time, sleep
 import Genetic
 from Const import probs
@@ -8,14 +8,16 @@ import NSGA_2
 import matplotlib.pyplot as plt
 import GeneticProgramming
 import threading
+from Utils import print_nqueens_board, get_args
 
 GA_MAXITER = 150
 KS_MAXITER = 30
-species_thres = [4.3, 6.3, 8.91, 12.7]
 spec_thres_3 = None
 GLOBAL_BEST = None
+ABSOLUTE_TIME = [None]*7
 threadLock = threading.Lock()
 ISLANDS = []
+NUM_OF_THREADS = 0
 
 
 class myThread(threading.Thread):
@@ -40,23 +42,6 @@ class myThread(threading.Thread):
         self.island.receive_migrants(migrants)
 
 
-def get_args(question):
-    problem_args = []
-
-    path = Path(f'{question}.txt')
-    with open(path) as f:
-        lines = f.readlines()
-
-    for i, line in enumerate(lines):
-        problem_args.append(int(lines[i][:-1]))
-
-    N = int(problem_args[0])
-    C = int(problem_args[1])
-    WEIGHTS = problem_args[2:]
-
-    return N, C, WEIGHTS, species_thres[question - 1]
-
-
 # TODO what we do if spos_1 == spos_2
 
 def run_minimal_conflicts(N):
@@ -71,7 +56,7 @@ def run_minimal_conflicts(N):
 
 
 def run_genetic_algo(problem, N, question):
-    global GLOBAL_BEST
+    global GLOBAL_BEST, ABSOLUTE_TIME
     pop_size = 1000
     current_island = threading.currentThread().getName()
 
@@ -94,7 +79,6 @@ def run_genetic_algo(problem, N, question):
     # Initialize algorithm vars
     cross_method = 2
     selection_method = 2
-
     max_iter = GA_MAXITER
 
     # If its N Queens problem
@@ -108,7 +92,7 @@ def run_genetic_algo(problem, N, question):
             pop_size = 1000
             selection_method = 0
             cross_method = 5
-        elif current_island == 'Island-3':
+        elif current_island == 'Island-1':
             selection_method = 2
             cross_method = 5
         else:
@@ -151,10 +135,15 @@ def run_genetic_algo(problem, N, question):
 
     # If its Bin packing problem
     elif problem == 3:
-        std_threshold = 0.1
-        spec_threshold = spec_thres_3
         cross_method = 4
         pop_size = 400
+
+        if current_island == 'Island-5':
+            pop_size = 200
+
+        max_iter = 150
+        std_threshold = 0.1
+        spec_threshold = spec_thres_3
 
     # If its Baldwin effect
     elif problem == 4:
@@ -179,43 +168,54 @@ def run_genetic_algo(problem, N, question):
 
     ######################################################################
     start_time = time()
+
     if problem == 3 or problem == 1:
         current_population = Genetic.Population(problem=problem, pop_size=pop_size, speciation_threshold=spec_threshold)
     else:
         current_population = Genetic.Population(problem=problem, pop_size=pop_size)
 
     threading.currentThread().set_population(current_population)
-
     current_population.init_population(N=N)
 
     for i in range(max_iter):
+
         generation_start_time = time()
         current_population.calc_fitness()
 
-        if problem == 1 or problem == 3:
+        if problem == 3:
             # current_population.fitness_share()
             species = current_population.make_species()
             number_of_species = len(current_population.species_list)
             generation_species.append(number_of_species)
-            print(f"Current number of species: {number_of_species} ")
+            # print(f"Current number of species: {number_of_species} ")
 
         current_population.sort_by_fitness()
-        current_population.spread_migrants()
-        current_population.perform_migration()
+        if NUM_OF_THREADS > 1:  # If we have more then 1 island we will perform migration
+            current_population.spread_migrants()
+            current_population.perform_migration()
 
         best_inv = current_population.get_best()
 
         ################ Synchronize Area ################
         # Setting global best
         threadLock.acquire()
+
         if GLOBAL_BEST is None:
             GLOBAL_BEST = best_inv
         else:
             # If its maximize problem
-            if problem == 1 or problem == 3 or problem == 4 or problem == 6:
+            if problem == 1 or problem == 4 or problem == 6:
                 if best_inv.fitness > GLOBAL_BEST.fitness:
                     GLOBAL_BEST = best_inv
                     print('Best: ', GLOBAL_BEST.gene, '(', GLOBAL_BEST.fitness, ')')
+
+            elif problem == 3 and best_inv is not None:  # Check by number of valid empty bins
+                if best_inv.gene.empty_bins > GLOBAL_BEST.gene.empty_bins:
+                    print(best_inv.gene.empty_bins, GLOBAL_BEST.gene.empty_bins)
+                    GLOBAL_BEST = deepcopy(best_inv)
+                    print('Best: ', GLOBAL_BEST.gene, '(', GLOBAL_BEST.fitness, ')')
+                    print('New number of empty bins: ', GLOBAL_BEST.gene.empty_bins)
+
             else:
                 if best_inv.fitness < GLOBAL_BEST.fitness:
                     GLOBAL_BEST = best_inv
@@ -235,7 +235,7 @@ def run_genetic_algo(problem, N, question):
         generation_avg_fitness.append(avg_fitness)
         generation_std.append(std)
 
-        if problem == 1 or problem == 3:
+        if problem == 1:
             ####################################################################
             # Checking if were converging to local optima
             if i > local_optima_range:  # If were after 10 generation we will start checking
@@ -290,8 +290,7 @@ def run_genetic_algo(problem, N, question):
         print(f'For thread {current_island}:\nGeneration running time for iteration {i}: ',
               time() - generation_start_time)
 
-    Genetic.PROGRAM_TERMINATED = True
-    print('Absolute running time: ', time() - start_time)
+    print('Absolute running time: ', time() - start_time, '\n')
 
     # elif problem == 3:
     #     plt.plot(list(range(max_iter)), generation_species, color='blue', label='Number of species')
@@ -316,19 +315,13 @@ def run_genetic_algo(problem, N, question):
     #     plt.show()
 
 
-def print_nqueens_board(final_board, N):
-    # print final board
-    board = ["-"] * N ** 2
-    for i in range(0, N):
-        board[i * N + final_board[i]] = "Q"
+def multi_threading_ga(problem, N, question, num_threads=5):
+    global ISLANDS
+    # running_times = []
+    # speed_up = []
+    # efficiency = []
 
-    for row in range(0, N):
-        print(board[row * N:(row + 1) * N])
-
-    print("")
-
-
-def multi_threading_ga(problem, N, question):
+    ISLANDS = []
     # If its Bin packing problem
     if problem == 3:
         global spec_thres_3
@@ -349,66 +342,83 @@ def multi_threading_ga(problem, N, question):
         GeneticProgramming.init_math_args()
         GeneticProgramming.PROBLEM = 'M'
 
-    # Create new threads
-    thread1 = myThread(1, "Island-1", N, question, problem)
-    thread2 = myThread(2, "Island-2", N, question, problem)
-    thread3 = myThread(3, "Island-3", N, question, problem)
-    thread4 = myThread(4, "Island-4", N, question, problem)
-    thread5 = myThread(5, "Island-5", N, question, problem)
+    # Create new threads and add to islands
+    for i in range(NUM_OF_THREADS):
+        thread = myThread(1, f"Island-{i + 1}", N, question, problem)
+        ISLANDS.append(thread)
 
-    ISLANDS.append(thread1)
-    ISLANDS.append(thread2)
-    ISLANDS.append(thread3)
-    ISLANDS.append(thread4)
-    ISLANDS.append(thread5)
     Genetic.ISLANDS = ISLANDS
     # Start new Threads
-    thread1.start()
-    thread2.start()
-    thread3.start()
-    thread4.start()
-    thread5.start()
+    for island in ISLANDS:
+        island.start()
 
     # Waiting for threads to terminate
-    thread1.join()
-    thread2.join()
-    thread3.join()
-    thread4.join()
-    thread5.join()
+    for island in ISLANDS:
+        island.join()
 
-    # print final board if its N Queens
-    if problem == 0:
-        print_nqueens_board(GLOBAL_BEST.gene, N)
-    else:
-        print(GLOBAL_BEST.gene)
+    if problem == 3:
+        print(f"Number of Empty bins: {GLOBAL_BEST.gene.empty_bins}")
 
     if problem == 7:
         print(f"Number of hits: {GLOBAL_BEST.gene.hits}")
 
     print("Fitness", GLOBAL_BEST.fitness)
 
+    # import numpy as np
+    # running_times = ABSOLUTE_TIME
+    # for i in range(7):
+    #     speed_up.append(np.true_divide(running_times[0], running_times[i]))
+    # print(running_times)
+    # for i in range(7):
+    #     efficiency.append(np.true_divide(running_times[0], (i+1)*running_times[i]))
+
+    # plt.figure(2)
+    # plt.plot(xs, speed_up, color='blue', label='T1/Tp')
+    # plt.xlabel("Number of threads")
+    # plt.ylabel("Speed Up")
+    #
+    # plt.figure(3)
+    # plt.plot(xs, efficiency, color='blue', label='T1/Tp')
+    # plt.xlabel("Number of threads")
+    # plt.ylabel("Efficiency")
+    # plt.show()
+
 
 def main():
+    global NUM_OF_THREADS
     inp = None
     question = None
+
+    while True:
+        num_threads = int(input("Choose number of threads (>= 1) : "))
+        if num_threads >= 1:
+            NUM_OF_THREADS = num_threads
+            break
+        print("Invalid number, try again")
+
     problem = int(input("Insert 0 for N Queens, 1 for Knap sack, 2 for String problem, 3 for Bin packing problem,"
-                        "4 for Baldwing effect simulation, 5 for NSGA-2, 6 for XOR using GP, 7 for Univariate using "
+                        "4 for Baldwin effect simulation, 5 for NSGA-2, 6 for XOR using GP, 7 for Univariate using "
                         "GP:"))
     if problem == 0:
         inp = int(input("Choose N: "))
     elif problem == 1:
-        inp = int(input("Choose Problem number from dataset (0-7): "))
+        while True:
+            inp = int(input("Choose Problem number from dataset (0-7): "))
+            if 0 <= inp <= 7:
+                break
+            print("Invalid number, try again")
     elif problem == 3:
-        question = int(input("Choose Problem number from dataset (1-4): "))
-        while question >= 5 or question <= 0:
-            print("Problem number is not valid please choose again: ")
+        while True:
             question = int(input("Choose Problem number from dataset (1-4): "))
+            if 1 <= question <= 4:
+                break
+            print("Invalid number, try again")
 
     if problem == 5:
         NSGA_2.NSGA_2_Solver()
 
     else:
-        multi_threading_ga(problem=problem, N=inp, question=question)
+        multi_threading_ga(problem=problem, N=inp, question=question, num_threads=num_threads)
 
     # run_minimal_conflicts(N=N)
 

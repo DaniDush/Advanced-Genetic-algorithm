@@ -18,16 +18,10 @@ GA_MUTATIONRATE = 0.25
 GA_TARGET = "Hello world!"
 UNIFORM_PR = 0.5
 WEIGHT_BOUND = 100
-THREAD_1_MIGRATION = [[] for i in range(5)]
-THREAD_2_MIGRATION = [[] for i in range(5)]
-THREAD_3_MIGRATION = [[] for i in range(5)]
-THREAD_4_MIGRATION = [[] for i in range(5)]
-THREAD_5_MIGRATION = [[] for i in range(5)]
-
 PrintLock = threading.Lock()
 threadLock = threading.Lock()
-PROGRAM_TERMINATED = False
 ISLANDS = []
+
 
 class Genome:
     """ Genome class """
@@ -42,11 +36,12 @@ class Genome:
         """ Override comparison method (for sorting) """
         return self.fitness > other.fitness
 
-    def calc_individual_fitness(self):
+    def calc_individual_fitness(self, problem=0):
         """ calculation of our gene score with chosen heuristic and aging score """
         temp_fitness = self.gene.get_fitness()
         # Adding extra aging score
-        temp_fitness += self.aging()
+        if problem != 3:
+            temp_fitness += self.aging()
         return temp_fitness
 
     def mutate(self, num_of_mutations):
@@ -184,7 +179,7 @@ class Population:
 
     def calc_fitness(self):
         for i in range(self.pop_size):
-            temp_fitness = self.genomes[i].calc_individual_fitness()
+            temp_fitness = self.genomes[i].calc_individual_fitness(self.problem)
             self.genomes[i].fitness = temp_fitness
 
     def sort_by_fitness(self):
@@ -238,7 +233,6 @@ class Population:
 
     def get_best_fitness(self):
         i = 0
-        size = len(self.genomes)
         if self.problem == 3:
             while True:
                 empty_bins = 0
@@ -253,9 +247,10 @@ class Population:
                         break
 
                 if flag is True:
-                    print(f"Number of empty bins for best individual is: {empty_bins}")
+                    # print(f"Number of empty bins for best individual is: {empty_bins}")
+                    self.genomes[i].gene.empty_bins = empty_bins
                     return self.genomes[i]
-                elif i == size - 1:
+                elif i == self.pop_size - 1:
                     return None
                 else:
                     i += 1
@@ -643,7 +638,7 @@ class Population:
         """searching for matching species from species_list"""
         species_counter = 0
         for j, species in enumerate(self.species_list):
-            distance = self.genomes[species[0]].gene.calc_distance(self.genomes[i].gene) / self.genomes[i].gene.N
+            distance = int(self.genomes[species[0]].gene.calc_distance(self.genomes[i].gene) / self.genomes[i].gene.N)
 
             if distance < self.speciation_threshold:
                 self.genomes[i].species = j
@@ -657,7 +652,6 @@ class Population:
     def adjust_speciation_threshold(self, max_iterations=3):
         """Adjust the number of species to be around max_species"""
         iterations = 0
-
         while len(
                 self.species_list) != self.optimal_species and self.speciation_threshold > 0 and iterations < max_iterations:
             iterations += 1
@@ -667,7 +661,7 @@ class Population:
 
     def calc_similarity(self):
         # We will sample 10% of the population to measure distances
-        sampled_list = random.sample(range(self.pop_size), round(self.pop_size * 10 / 100))
+        sampled_list = random.sample(range(self.pop_size), round(self.pop_size/10))
         max_distance = 0
         distance = 0
 
@@ -693,7 +687,7 @@ class Population:
 
     def spread_migrants(self):
         current_island = threading.currentThread().getName()
-        num_of_inv = int((2 * self.pop_size) / 100)     # Taking 2% from the population
+        num_of_inv = int((2 * self.pop_size) / 100)  # Taking 2% from the population
 
         for i, island in enumerate(ISLANDS):
             if island.getName() != current_island:
@@ -701,28 +695,38 @@ class Population:
                 # Taking 2% from first half (Fitness-based)
                 choose_from = self.genomes[0:int(self.pop_size / 2)]
                 immigrants = random.choices(choose_from, k=int(num_of_inv))
-                # Taking 1% from Second half (Random-based)
+                # Taking 1% from Second half (Random-based) - Uncomment for second method
                 # choose_from = self.genomes[int(self.pop_size / 2):]
                 # immigrants.extend(random.choices(choose_from, k=int(num_of_inv / 2)))
 
                 # Sending the migrants to different island
-                island.receive_migrants(sorted(immigrants))
+                # If its minimize problem
+                if self.problem == 0 or self.problem == 2 or self.problem == 7:
+                    island.receive_migrants(sorted(immigrants))
+                else:
+                    island.receive_migrants(sorted(immigrants, reverse=True))
 
     def receive_migrants(self, immigrants):
         # Receive migrants from another island
         threadLock.acquire()
         # Using heap to optimize merge
-        self.migrants_list = list(merge(deepcopy(immigrants), self.migrants_list))
+        if self.problem == 0 or self.problem == 2 or self.problem == 7:
+            self.migrants_list = list(merge(deepcopy(immigrants), self.migrants_list))
+        else:
+            self.migrants_list = list(merge(deepcopy(immigrants), self.migrants_list, reverse=True))
         threadLock.release()
 
     def perform_migration(self):
         # If we can take migrants from different islands
         if self.migrants_list:
             threadLock.acquire()
-            print("Migration performed")
             migration_size = len(self.migrants_list)
             self.genomes = self.genomes[:-migration_size]
-            self.genomes = list(merge(self.genomes, self.migrants_list))
+            if self.problem == 0 or self.problem == 2 or self.problem == 7:
+                self.genomes = list(merge(self.genomes, self.migrants_list))
+            else:
+                self.genomes = list(merge(self.genomes, self.migrants_list, reverse=True))
 
             self.migrants_list = []
+            print("Migration performed")
             threadLock.release()
